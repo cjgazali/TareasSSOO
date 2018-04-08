@@ -129,15 +129,20 @@ void endfree() {
             continue;
         }
         current = cola -> head;
-        while (current) {
+        int count = 0;
+        while (current != cola -> tail -> next) {
+            count++;
             free(current -> bursts_list);
             to_free = current;
+            if (current == cola -> tail) {  // todos así si funciona
+                free(to_free);
+                break;
+            }
             current = current -> next;
             free(to_free);
         }
         free(cola);
     }
-
     free(colas);
 }
 
@@ -205,7 +210,8 @@ int main(int argc, char const *argv[]) {
     bool running = false;
 
     while (colas[0] -> length < np) {
-        if (colas[1] -> head -> t_inicio == t) {
+        if (colas[1] -> length > 0 && 
+            colas[1] -> head -> t_inicio == t) {
             pid_in = pop(1);
             append_to_queue(2, pid_in);
         }
@@ -217,7 +223,6 @@ int main(int argc, char const *argv[]) {
                 }
                 if (colas[i] -> head -> estado == 2) {
 
-
                     runpid = colas[i] -> head;
                     this_burst = runpid -> i_burst;
 
@@ -227,12 +232,6 @@ int main(int argc, char const *argv[]) {
                     if (q_left == 0) {
                         runpid -> bloqueos++;
                         pop(i);
-                        if (i < n_queues + 2 - 1) {
-                            append_to_queue(i + 1, runpid);
-                        }
-                        else {
-                            append_to_queue(i, runpid);
-                        }
                         if (runpid -> bursts_list[this_burst] == 0) {
                             if (this_burst == runpid -> num_bursts - 1) {
                                 runpid -> estado = 0;
@@ -241,6 +240,20 @@ int main(int argc, char const *argv[]) {
                             }
                             else {
                                 runpid -> i_burst++;
+                                if (i < n_queues + 2 - 1) {
+                                    append_to_queue(i + 1, runpid);
+                                }
+                                else {
+                                    append_to_queue(i, runpid);
+                                }
+                            }
+                        }
+                        else {
+                            if (i < n_queues + 2 - 1) {
+                                append_to_queue(i + 1, runpid);
+                            }
+                            else {
+                                append_to_queue(i, runpid);
                             }
                         }
                         running = false; // ??
@@ -292,7 +305,7 @@ int main(int argc, char const *argv[]) {
             // if (colas[0] -> length == np) {
             //     break;
             // }
-            printf("idle\n");
+            printf("idle\n");  // NO SE IMPRIME
         }
 
         // subir waiting times a procesos ready
@@ -316,7 +329,7 @@ int main(int argc, char const *argv[]) {
 
     }
 
-    // imprime procesos ordenados y bursts
+    // imprime procesos ordenados y bursts de cola no vacía
     current = colas[0] -> head;
     while (current) {
         printf("%s %d %d ", current -> nombre, current -> t_inicio, current -> num_bursts);
@@ -324,11 +337,15 @@ int main(int argc, char const *argv[]) {
             printf("%d ", current -> bursts_list[i]);
         }
         printf("\n");
+        if (current == colas[6] -> tail) {  // todos así si funciona
+            break;
+        }
         current = current -> next;
     }
 
-    endfree();
+    printf("end\n");
 
+    endfree();
 
 	return 0;
 }
