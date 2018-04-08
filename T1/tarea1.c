@@ -105,11 +105,11 @@ void ordered_insert_to_queue(int i_queue, proceso* p) {
             proceso* prev;
             while (p -> t_inicio > current -> t_inicio) {
                 prev = current;
-                current = current -> next;
-                if (!current) {
+                if (current == cola -> tail) {
                     cola -> tail = p;
                     break;
                 }
+                current = current -> next;
             }
             p -> next = prev -> next;
             prev -> next = p;
@@ -250,8 +250,9 @@ void print_queue(int icola) {
     if (colas[icola] -> length == 0) {
         return;
     }
-    current = colas[icola] -> head;
-    while (current) {
+    Queue* cola = colas[icola];
+    current = cola -> head;
+    while (current != cola -> tail -> next) {  // (current)
         printf("%s:\nTurnos de CPU: %d\nBloqueos: %d\nTurnaround time: %d\nResponse time: %d\nWaiting time: %d\n", 
             current -> nombre, current -> turnos_cpu, current -> bloqueos, current -> turnaround_time, 
             current -> response_time, current -> waiting_time);
@@ -259,9 +260,9 @@ void print_queue(int icola) {
         //    printf("%d ", current -> bursts_list[i]);
         //}
         printf("\n");
-        if (current == colas[icola] -> tail) {  // todos así si funciona
-            break;
-        }
+        // if (current == colas[icola] -> tail) {  // todos así si funciona
+        //     break;
+        // }
         current = current -> next;
     }
 }
@@ -341,15 +342,10 @@ int main(int argc, char const *argv[]) {
 
 
     // SIMULACIÓN
-    
     int np = colas[1] -> length;
-    
     int this_burst;
     proceso* runpid;
     
-
-    
-    // if (!strcmp(version, v1)) {
     while (colas[0] -> length < np) {
         
         // printf("%d\n", t);

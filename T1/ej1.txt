@@ -1,0 +1,16 @@
+proceso1 0 3 8 2 3
+proceso2 5 2 1 2
+proceso3 2 4 1 2 3 4
+proceso4 1 3 71 2 3
+proceso5 10 3 1 2 3
+proceso6 15 2 1 21
+proceso7 12 4 4 2 3 4
+proceso8 11 3 7 2 3
+proceso9 110 3 1 2 3
+proceso10 115 2 1 2
+proceso11 21 4 1 2 3 4
+proceso12 111 3 7 2 31
+proceso13 17 3 21 2 31
+proceso14 45 2 1 2
+proceso15 42 4 1 23 3 4
+proceso16 41 3 7 2 3
