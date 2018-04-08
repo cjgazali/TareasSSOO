@@ -2,15 +2,18 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <signal.h>
+#include <unistd.h>
 
 
+// ESTRUCTURAS
 typedef enum { false, true } bool;
 
-typedef struct process {  // v3 tendrá quantum
+typedef struct process {
 	char nombre[256];
-	int estado; // o con números?
+	int estado;
 	int num_bursts;
-	int i_burst;  // -1 init. En primera atención comienza a atender desde 0
+	int i_burst;
 	int* bursts_list;
 	int pid;
 	int turnos_cpu;
@@ -19,7 +22,6 @@ typedef struct process {  // v3 tendrá quantum
 	int waiting_time;
 	int response_time;
 	int turnaround_time;
-	// int t_last_attention;
 	struct process* next;
 } proceso;
 
@@ -30,13 +32,24 @@ typedef struct ListaLigada {
 	int length;
 } Queue;
 
+// VARIABLES
+// variables usadas por todo el programa
+int i;
+int n_queues;
+Queue** colas;
+proceso* current;
+const char* v1 = "v1";
+const char* v2 = "v2";
+const char* v3 = "v3";
+const char* version;
+// variables globales simulación
+int t = 0;
+int q;
+int q_left;  // contador para descontar q cada vez
+bool running = false;
+int S;
 
-typedef struct {
-	proceso** procesos;
-	int length;
-} ArregloProcesos;
-
-
+// FUNCIONES
 proceso* create_process(int id, char* nombre, int ti, int n) {
     proceso* pp = malloc(sizeof(proceso));
     strcpy(pp -> nombre, nombre);
@@ -51,20 +64,12 @@ proceso* create_process(int id, char* nombre, int ti, int n) {
     pp -> waiting_time = 0;
     pp -> response_time = -1;  // primera atención wait=resp / para stats if -1
     pp -> turnaround_time = 0;
-    // pp -> t_last_attention = -1;  // para stats if -1
-    // pp -> process* next;
     return pp;
 }
 
 void add_burst(proceso* p, int i, int b) {
     p -> bursts_list[i] = b;
 }
-
-int i;
-int n_queues;
-Queue** colas;
-proceso* current;
-int t = 0;
 
 
 void append_to_queue(int i_queue, proceso* p) {
@@ -118,80 +123,6 @@ void ordered_insert_to_queue(int i_queue, proceso* p) {
     cola -> length ++;
 }
 
-
-void endfree() {
-
-    proceso* to_free;
-
-    for (i = 0; i < n_queues + 2; i++) {
-        Queue* cola = colas[i];
-        if (cola -> length == 0) {
-            free(cola);
-            continue;
-        }
-        current = cola -> head;
-        int count = 0;
-        while (current != cola -> tail -> next) {
-            count++;
-            free(current -> bursts_list);
-            to_free = current;
-            if (current == cola -> tail) {  // todos así si funciona
-                free(to_free);
-                break;
-            }
-            current = current -> next;
-            free(to_free);
-        }
-        free(cola);
-    }
-    free(colas);
-}
-
-void p_arrive() {
-    proceso* pid_in;
-    pid_in = pop(1);
-    append_to_queue(2, pid_in);
-    printf("t=%d: ARRIVE: ready %s at queue 1\n", t, pid_in -> nombre);
-}
-
-int q;
-int q_left;
-bool running = false;
-int S;
-int n_ups = 0;
-
-const char* v1 = "v1";
-const char* v2 = "v2";
-const char* v3 = "v3";
-const char* version;
-
-void scheduler() {
-    proceso* new_runner;
-    for (i = 2; i < n_queues + 2; i++) {
-        if (colas[i] -> length == 0) {
-            continue;
-        }
-        if (colas[i] -> length > 0) {
-            new_runner = colas[i] -> head;
-            new_runner -> estado = 2;
-            printf("t=%d: SCHEDULER: running %s from queue %d\n", t, new_runner -> nombre, i - 1);
-            new_runner -> turnos_cpu++;
-            // new_runner -> t_last_attention = t;
-            if (new_runner -> response_time == -1) {
-                new_runner -> response_time = new_runner -> waiting_time;
-            }
-            if (!strcmp(version, v3)) {
-                q_left = (i - 1) * q;  // por enunciado
-            }
-            else {
-                q_left = q;
-            }
-            running = true;
-            break;
-        }
-    }
-}
-
 void insert_head(int icola, proceso* pp) {
     Queue* cola = colas[icola];
     if (cola -> length == 0) {
@@ -216,6 +147,50 @@ void append_cola(int ifirst, int ilast) {
     colalast -> tail = nothing;
 }
 
+void send_to_tail(proceso* pid) {
+    if (i < n_queues + 2 - 1) {
+        append_to_queue(i + 1, pid);
+        printf("at queue %d\n", i);
+    }
+    else {
+        append_to_queue(i, pid);
+        printf("at queue %d\n", i - 1);
+    }
+}
+
+void p_arrive() {
+    proceso* pid_in;
+    pid_in = pop(1);
+    append_to_queue(2, pid_in);
+    printf("t=%d: ARRIVE: ready %s at queue 1\n", t, pid_in -> nombre);
+}
+
+void scheduler() {
+    proceso* new_runner;
+    for (i = 2; i < n_queues + 2; i++) {
+        if (colas[i] -> length == 0) {
+            continue;
+        }
+        if (colas[i] -> length > 0) {
+            new_runner = colas[i] -> head;
+            new_runner -> estado = 2;
+            printf("t=%d: SCHEDULER: running %s from queue %d\n", t, new_runner -> nombre, i - 1);
+            new_runner -> turnos_cpu++;
+            if (new_runner -> response_time == -1) {
+                new_runner -> response_time = new_runner -> waiting_time;
+            }
+            if (!strcmp(version, v3)) {
+                q_left = (i - 1) * q;  // por enunciado
+            }
+            else {
+                q_left = q;
+            }
+            running = true;
+            break;
+        }
+    }
+}
+
 void check_S() {
     if (t % S != 0 || t == 0 || n_queues == 1) {
         return;
@@ -228,21 +203,9 @@ void check_S() {
         }
         if (colas[i] -> head -> estado == 2) {
             proceso* runpid = pop(i);
-            printf("\twith %s running at queue %d\n", runpid -> nombre, i - 1);
             insert_head(2, runpid);
         }
         append_cola(2, i);
-    }
-}
-
-void send_to_tail(proceso* pid) {
-    if (i < n_queues + 2 - 1) {
-        append_to_queue(i + 1, pid);
-        printf("at queue %d\n", i);
-    }
-    else {
-        append_to_queue(i, pid);
-        printf("at queue %d\n", i - 1);
     }
 }
 
@@ -256,13 +219,7 @@ void print_queue(int icola) {
         printf("%s:\nTurnos de CPU: %d\nBloqueos: %d\nTurnaround time: %d\nResponse time: %d\nWaiting time: %d\n", 
             current -> nombre, current -> turnos_cpu, current -> bloqueos, current -> turnaround_time, 
             current -> response_time, current -> waiting_time);
-        //for (i = 0; i < current -> num_bursts; i++) {
-        //    printf("%d ", current -> bursts_list[i]);
-        //}
         printf("\n");
-        // if (current == colas[icola] -> tail) {  // todos así si funciona
-        //     break;
-        // }
         current = current -> next;
     }
 }
@@ -271,13 +228,47 @@ void print_sim() {
     printf("\nProcesos terminados: %d\n", colas[0] -> length);
     printf("Tiempo total: %d\n\n", t - 1);
 
-    print_queue(0);  // que imprima todas!!!
+    for (i = 0; i < n_queues + 2; i++) {
+         print_queue(i);
+    }
+}
+
+void endfree() {
+
+    proceso* to_free;
+
+    for (i = 0; i < n_queues + 2; i++) {
+        Queue* cola = colas[i];
+        if (cola -> length == 0) {
+            free(cola);
+            continue;
+        }
+        current = cola -> head;
+        int count = 0;
+        while (current != cola -> tail -> next) {
+            count++;
+            free(current -> bursts_list);
+            to_free = current;
+            if (current == cola -> tail) {
+                free(to_free);
+                break;
+            }
+            current = current -> next;
+            free(to_free);
+        }
+        free(cola);
+    }
+    free(colas);
+}
+
+void handler() {
+    sleep(1);
+    print_sim();
 }
 
 
-
-
 int main(int argc, char const *argv[]) {
+
 	if(argc < 5)
     {
       printf("Mal uso de parámetros.\n");
@@ -302,14 +293,6 @@ int main(int argc, char const *argv[]) {
     }
 
     colas = malloc(sizeof(Queue*)*(n_queues + 2));
-
-    // Queue* colaFI = malloc(sizeof(Queue));
-    // colaFI -> length = 0;
-    // colas[0] = colaFI;
-
-    // Queue* StartQueue = malloc(sizeof(Queue));
-    // StartQueue -> length = 0;
-    // colas[1] = StartQueue;
 
     for (i = 0; i < n_queues + 2; i++) {  // incluye 0:finished - 1:iniciales
     	Queue* NuevaCola = malloc(sizeof(Queue));
@@ -340,8 +323,9 @@ int main(int argc, char const *argv[]) {
     }
     fclose(fp);
 
-
-    // SIMULACIÓN
+    ////////////////////////////////////////////////
+    // SIMULACIÓN    ///////////////////////////////
+    ////////////////////////////////////////////////
     int np = colas[1] -> length;
     int this_burst;
     proceso* runpid;
@@ -350,7 +334,7 @@ int main(int argc, char const *argv[]) {
         
         // printf("%d\n", t);
 
-        if (colas[1] -> length > 0 && 
+        if (colas[1] -> length > 0 &&  // ve si llegó algún proceso
             colas[1] -> head -> t_inicio == t) {
             p_arrive();
         }
@@ -389,7 +373,7 @@ int main(int argc, char const *argv[]) {
                             printf("t=%d: OUT OF q: ready %s ", t, runpid -> nombre);
                             send_to_tail(runpid);
                         }
-                        running = false; // ??
+                        running = false;
                     }
                     else if (runpid -> bursts_list[this_burst] == 0) {
                         runpid -> estado = 1;
@@ -405,7 +389,7 @@ int main(int argc, char const *argv[]) {
                             runpid -> i_burst++;
                             append_to_queue(i, runpid);
                         }
-                        running = false; // ??
+                        running = false;
                     }
                     break;
                 }
@@ -414,7 +398,6 @@ int main(int argc, char const *argv[]) {
 
         if (strcmp(version, v1)) {  // aplica S antes de Scheduling
             check_S();
-            // printf("out S\n");
         }     
 
         if (!running) {  // scheduling
@@ -422,35 +405,23 @@ int main(int argc, char const *argv[]) {
         }
 
         if (!running) {
-            // if (colas[0] -> length == np) {
-            //     break;
-            // }
             if (colas[0] -> length < np) {
-                printf("t=%d: idle\n", t);  // NO SE IMPRIME??
+                printf("t=%d: idle\n", t);
             }
         }
 
         // subir waiting times a procesos ready
         for (i = 2; i < n_queues + 2; i++) {
-            // printf("in\n");
             Queue* cola = colas[i];
             if (cola -> length == 0) {
                 continue;
             }
-            // printf("not 0: %d\n", i);
             current = cola -> head;
-            // printf("to while\n");
-            // printf("cola length %d\n", cola -> length);
-            while (current != cola -> tail -> next) {  // cuidado, pero si funciona revisar que todos sean así
-                // printf("in while\n");
-                // printf("%s\n", current -> nombre);
+            while (current != cola -> tail -> next) {
                 if (current -> estado == 1) {
-                    // printf("in while if\n");
                     current -> waiting_time++;
                 }
-                // printf("ok\n");
                 current = current -> next;
-                // printf("ok\n");
             }
         }
 
@@ -458,10 +429,7 @@ int main(int argc, char const *argv[]) {
         // sleep(1);
 
     }
-    // }
 
-    // imprime procesos ordenados y bursts de cola no vacía
-    // ojo, todo esto debiera ser una función que también se ejecuta al hacer ctrl+c...
     print_sim();
 
     endfree();
