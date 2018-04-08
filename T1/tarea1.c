@@ -215,10 +215,17 @@ void print_queue(int icola) {
     }
     Queue* cola = colas[icola];
     current = cola -> head;
-    while (current != cola -> tail -> next) {  // (current)
-        printf("%s:\nTurnos de CPU: %d\nBloqueos: %d\nTurnaround time: %d\nResponse time: %d\nWaiting time: %d\n", 
+    while (current != cola -> tail -> next) {
+        if (current -> response_time == -1) {
+            printf("%s:\nTurnos de CPU: %d\nBloqueos: %d\nTurnaround time: %d\nResponse time: -\nWaiting time: %d\n", 
+            current -> nombre, current -> turnos_cpu, current -> bloqueos, current -> turnaround_time, 
+            current -> waiting_time);
+        }
+        else {
+            printf("%s:\nTurnos de CPU: %d\nBloqueos: %d\nTurnaround time: %d\nResponse time: %d\nWaiting time: %d\n", 
             current -> nombre, current -> turnos_cpu, current -> bloqueos, current -> turnaround_time, 
             current -> response_time, current -> waiting_time);
+        }
         printf("\n");
         current = current -> next;
     }
@@ -264,10 +271,13 @@ void endfree() {
 void handler() {
     sleep(1);
     print_sim();
+    exit(0);
 }
 
 
 int main(int argc, char const *argv[]) {
+
+    signal(SIGINT, handler);
 
 	if(argc < 5)
     {
@@ -426,7 +436,7 @@ int main(int argc, char const *argv[]) {
         }
 
         t++;
-        // sleep(1);
+        sleep(1);
 
     }
 
