@@ -39,7 +39,6 @@ int n_queues;
 Queue** colas;
 proceso* current;
 const char* v1 = "v1";
-const char* v2 = "v2";
 const char* v3 = "v3";
 const char* version;
 // variables globales simulación
@@ -215,7 +214,7 @@ void print_queue(int icola) {
     }
     Queue* cola = colas[icola];
     current = cola -> head;
-    while (current != cola -> tail -> next) {
+    while (current != cola -> tail) {
         if (current -> response_time == -1) {
             printf("%s:\nTurnos de CPU: %d\nBloqueos: %d\nTurnaround time: %d\nResponse time: -\nWaiting time: %d\n", 
             current -> nombre, current -> turnos_cpu, current -> bloqueos, current -> turnaround_time, 
@@ -229,6 +228,10 @@ void print_queue(int icola) {
         printf("\n");
         current = current -> next;
     }
+    current = cola -> tail;
+    printf("%s:\nTurnos de CPU: %d\nBloqueos: %d\nTurnaround time: %d\nResponse time: %d\nWaiting time: %d\n", 
+            current -> nombre, current -> turnos_cpu, current -> bloqueos, current -> turnaround_time, 
+            current -> response_time, current -> waiting_time);
 }
 
 void print_sim() {
@@ -252,7 +255,7 @@ void endfree() {
         }
         current = cola -> head;
         int count = 0;
-        while (current != cola -> tail -> next) {
+        while (current != cola -> tail) {
             count++;
             free(current -> bursts_list);
             to_free = current;
@@ -263,6 +266,9 @@ void endfree() {
             current = current -> next;
             free(to_free);
         }
+        current = cola -> tail;
+        free(current -> bursts_list);
+        free(current);
         free(cola);
     }
     free(colas);
@@ -273,7 +279,6 @@ void handler() {
     print_sim();
     exit(0);
 }
-
 
 int main(int argc, char const *argv[]) {
 
@@ -427,16 +432,21 @@ int main(int argc, char const *argv[]) {
                 continue;
             }
             current = cola -> head;
-            while (current != cola -> tail -> next) {
+            while (current != cola -> tail) {
                 if (current -> estado == 1) {
                     current -> waiting_time++;
                 }
                 current = current -> next;
             }
+            current = cola -> tail;
+            if (current -> estado == 1) {
+                current -> waiting_time++;
+            }
+            current = current -> next;
         }
 
         t++;
-        sleep(1);
+        // sleep(1);
 
     }
 
