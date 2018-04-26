@@ -168,7 +168,7 @@ row* leaf(row** root, int l, int *input) {
 	return current[input[l - 1]];
 }
 
-unsigned long int_to_int(unsigned long k) {
+unsigned long int_to_int(int k) {
     if (k == 0) return 0;
     if (k == 1) return 1;                       /* optional */
     return (k % 2) + 10 * int_to_int(k / 2);
@@ -187,6 +187,33 @@ char* long_to_binary(unsigned long k)
         }
         return c;
 }
+
+char* int_to_bin_char(int num, char* bin) {
+	// char bin[] = "0000000000000000000000000000";
+	// char* bin = malloc(sizeof(char)*28);
+	for (i = 0; i < 28; i++) {
+		bin[i] = '0';
+	}
+	int rest;
+	int divint;
+	i = 0;
+	while (num != 0) {
+		rest = num % 2;
+		num = (num - rest) / 2;
+		if (rest == 0) {
+			bin[27 - i] = '0';
+		}
+		else {
+			bin[27 - i] = '1';
+		}
+		i++;
+	}
+	return bin;
+}
+
+// int divint(int num1, int num2) {
+// 	return (num1 - (num1 % num2)) / num2;
+// }
 
 int* dir_off_split(int addr) {
 	printf("%d\n", addr);
@@ -315,7 +342,24 @@ int main(int argc, char const *argv[])
 
 
 	unsigned long addr = 268435455;
-	printf("%ld\n", int_to_int(268435455));
+	printf("%ld\n", int_to_int(268435));
+	
+	// char ad[] = "0000000000000000000000000000";
+	char* ad = malloc(sizeof(char)*28);
+	for (i = 0; i < 28; i++) {
+		ad[i] = '0';
+	}
+	printf("%s\n", ad);
+	printf("%c\n", ad[4]);
+	ad[4] = '1';
+	printf("%s\n", ad);
+	printf("%c\n", ad[4]);
+
+	printf("%d\n",  5 % 2);
+	printf("%d\n",  (5 - (5 % 2)) / 2);
+
+	char* bin = malloc(sizeof(char)*28);
+	char* direcc = int_to_bin_char(35363, bin);
 	
 
 
