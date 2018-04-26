@@ -1,6 +1,5 @@
-ls -al
 echo something
 touch a.txt
-cat a.txt
+echo something_else
 rm a.txt
 cat comandos1.txt

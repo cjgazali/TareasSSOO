@@ -10,6 +10,7 @@ typedef struct tarea {
     int pid;
     int resultado; // final
     int num_args;
+    int exit_code;
     char** argv; // los argumentos
 } tarea;
 
@@ -101,30 +102,60 @@ int main(int argc, char const *argv[])
     	printf("\n");
     }
 
-    char* arg0[3];
-    arg0[0] = "ls";
-    arg0[1] = "-al";
-    arg0[2] = NULL;
-    //execvp(lista[0]->cmd, arg0);
-    printf("\n Empezamos a ejecutar");
-    int aux=0;
+    int ejecutando=0;
     for (i=0; i<contador; i++){
-    	int pid = fork();
     	int status;
-    	if (pid == 0){
-    		//execvp(lista[i]->cmd, lista[i]->argv);
-    		execvp(lista[0]->cmd, arg0);
+    	//chequear que no llevo dos intentos
+    	ejecutando++;
+    	lista[i]->intentos ++;
+    	int identificador = fork();
+
+    	if (identificador == 0){
+    		execvp(lista[i]->cmd, lista[i]->argv);
     	}
-    	if ((pid = waitpid(pid, &status, 1)) == 0) {
-			printf("Still running!\n");
-			sleep(1);
-		} 
-		else {
-			printf("Exit with code %d\n", status);
+
+    	printf("Empieza a ejecutar %d\n", identificador);
+    	lista[i]->pid = identificador;
+    	sleep(1);
+		if (ejecutando >= n){ //estoy a tope
+			printf("A tope\n");
+			int aux_id=0;
+			aux_id = wait(&status); //espero 
+			printf("Esperamos...\n");
+
+			//pasando el exit code...
+			int j;
+			for (j=0; j<contador; j++){
+				if (lista[j]->pid == aux_id) {
+					lista[j]->exit_code = status;
+					printf("Terminó proceso %d con status %d\n", lista[j]->pid, lista[j]->exit_code);
+					ejecutando --;
+				}
+			}
+
 		}
     }
-    
-    //execvp(lista[0]->cmd, arg0);
+
+    // ya eché a correr todos, hago waits
+    sleep(1);
+    printf("\nAhora hacemos los waits...\n");
+
+    int k=0;
+	int aux_id=0;
+	int status=0;
+	aux_id = wait(&status); //espero
+	for (k=0; k<ejecutando; k++){
+		int j;
+		//printf("Entramos al for\n");
+		for (j=0; j<contador; j++){
+			//printf("Buscando %d, revisando %d", aux_id, lista[j]->pid);
+			if (lista[j]->pid == aux_id) {
+				lista[j]->exit_code = status;
+				printf("Terminó proceso %d con status %d\n", lista[j]->pid, lista[j]->exit_code);
+			}
+		}	
+	}
+
     //endfree();
 
     return 0;
