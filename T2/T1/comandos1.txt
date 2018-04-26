@@ -1,5 +1,7 @@
 ls -al
 echo something
-ps t
-date "+DATE: %Y-%m-%d%nTIME: %H:%M:%S"
-probando varias palabras "wow"
+echo algo... >> a.txt
+echo algo_mas... >> a.txt
+cat a.txt
+rm a.txt
+cat comandos1.txt

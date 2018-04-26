@@ -9,6 +9,7 @@ typedef struct tarea {
     int intentos; // parte en 0
     int pid;
     int resultado; // final
+    int num_args;
     char** argv; // los argumentos
 } tarea;
 
@@ -35,6 +36,7 @@ tarea* crear_tarea(char* linea) {
 	}
 	//printf("%d \n", count);
 	task -> argv = malloc(sizeof(char)*(count-1));
+	task -> num_args = count-1;
 	//printf("%s", linea);
 
 	// asignar al array
@@ -44,7 +46,6 @@ tarea* crear_tarea(char* linea) {
 		//printf("%s \n", token);
 		task -> argv[count] = token;
 		token = strtok(NULL, " ");
-		//task -> argv[count] = token;
 		//printf("%s", token);
 		count ++;
 	}
@@ -53,12 +54,13 @@ tarea* crear_tarea(char* linea) {
     //printf("Comando: %s\n", task -> cmd);
     //printf("Argumentos: \n");
     int i;
-    int length;
+    //int length;
     //length = sizeof(task->argv) / sizeof(task->argv[0]);
-    printf("Largo %d\n", count);
-    for (i=0; i <= count; i++){
-    	printf("%s \n", task -> argv[i]);
-    }
+    //printf("Largo %d\n", count);
+    //printf("Comandos: \n");
+    //for (i=0; i <= count; i++){
+    //	printf("%s \n", task -> argv[i]);
+    //}
     return task;
 }
 
@@ -70,23 +72,69 @@ void main(int argc, char const *argv[])
 {
     int n = atoi(argv[2]);
     const char* filename = argv[1];
+    tarea** lista;
 
-    // leer archivo
+    // contar líneas
     FILE* fp;
     char* line = NULL;
     size_t len = 0;
     ssize_t read;
+    int contador = 0; // número de tareas
     fp = fopen(filename, "r");
     while ((read = getline(&line, &len, fp)) != -1) {
-    	printf("READ %s", line);
-        crear_tarea(line);
-        printf("\n");
+    	contador++;
     } 
-    printf("\n");
+    printf("%d comandos\n", contador);
+    lista = malloc((contador-1)*sizeof(tarea));
     fclose(fp);
     if (line){
         free(line);
     }
+
+    // leer archivo y hacer tareas
+    contador=0;
+    line = NULL;
+    len = 0;
+    ssize_t read2;
+    fp = fopen(filename, "r");
+    while ((read2 = getline(&line, &len, fp)) != -1) {
+    	//lista = calloc(contador, sizeof(tarea));
+    	printf("READ %s %d", line, contador);
+        lista[contador] = crear_tarea(line);
+        //execvp(lista[contador]->cmd, lista[contador]->argv);
+        //printf("%s uf %s\n", crear_tarea(line)->cmd, lista[contador]->cmd);
+        
+        // OJO DE ACÁ EN ADELANTE
+        printf("Comando: %s\n", lista[0] -> cmd);
+        printf("%s ", lista[contador] -> argv[1]);
+        printf("%d", contador);
+        //printf("\n");
+        contador++;
+        // después de cada vuelta se cambian los atributos de todas las listas...
+    } 
+    fclose(fp);
+    if (line){
+        free(line);
+    }
+
+    int i = 0;
+    int j = 0;
+    printf("Todo bien??\n");
+    for (i=0; i<contador; i++){
+    	printf("Palabras: ");
+    	for (j=0; j<(lista[i]->num_args); j++){
+    		printf("%s ", lista[i]->argv[j]);
+    	}
+    	printf("\n");
+    }
+
+    //char *cmd = "ls";
+    //char *arg[3];
+    //arg[0] = "ls";
+    //arg[1] = "-a";
+    //arg[2] = NULL;
+    //execvp(cmd, arg);
+
 
     //endfree();
 }
