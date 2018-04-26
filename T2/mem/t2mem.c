@@ -74,10 +74,18 @@ void efficient_dir(int l, int *l_bits_return) {
 }
 
 
-// typedef struct TLB {
-// 	int address = -1;
-// 	int 
-// }
+typedef struct TLBRow {
+	char address[20];
+	int frame;
+	int valid;
+} tlbrow;
+
+tlbrow* create_tlb_row() {
+	tlbrow* t = malloc(sizeof(tlbrow));
+	t -> frame = -1;
+	t -> valid = 0;
+	return t;
+}
 
 typedef struct Row {
 	struct Row** table;
@@ -156,7 +164,7 @@ void free_tree(row** root, int levels, int *levels_bits) {
 		// printf("free rl1\n");
 		free(rl1);
 	}
-	printf("free root\n");
+	// printf("free root\n");
 	free(root);
 }
 
@@ -166,26 +174,6 @@ row* leaf(row** root, int l, int *input) {
 		current = current[input[i]] -> table;
 	}
 	return current[input[l - 1]];
-}
-
-unsigned long int_to_int(int k) {
-    if (k == 0) return 0;
-    if (k == 1) return 1;                       /* optional */
-    return (k % 2) + 10 * int_to_int(k / 2);
-}  // at https://stackoverflow.com/questions/5488377/converting-an-integer-to-binary-in-c
-
-char* long_to_binary(unsigned long k)
-
-{
-        static char c[28];
-        c[0] = '\0';
-
-        unsigned long val;
-        for (val = 1UL << (sizeof(unsigned long)*8-1); val > 0; val >>= 1)
-        {   
-            strcat(c, ((k & val) == val) ? "1" : "0");
-        }
-        return c;
 }
 
 char* int_to_bin_char(int num, char* bin) {
@@ -211,22 +199,49 @@ char* int_to_bin_char(int num, char* bin) {
 	return bin;
 }
 
-// int divint(int num1, int num2) {
-// 	return (num1 - (num1 % num2)) / num2;
-// }
-
-int* dir_off_split(int addr) {
-	printf("%d\n", addr);
-	char str[256];
-	sprintf(str, "%d", addr);  // to char bin
-	char dir[256];
-	strncpy(dir, str, 20);  // slice firsts
-	dir[10] = 0; // null terminate destination
-	printf("%s\n", dir);
-	int cut = strtol(dir, NULL, 2);
-	printf("%d\n", cut);
-	printf("%d\n", addr - (cut * pow(10, 8)));
+void dir_off_split(char* left, char* right, char* all) {
+	strncpy(left, all, 20);  // slice firsts
+	// left[20] = 0; // null terminate destination
+	for (i = 0; i < 8; i++) {
+		right[i] = all[20 + i];
+	}
 }
+
+void split_in_levels(char* ad, int l, int* l_bits, int* quest) {
+	
+	// printf("%s\n", ad);
+
+	if (l == 1) {
+		quest[0] = strtol(ad, NULL, 2);
+		// printf("%d\n", quest[0]);
+		return;
+	}
+
+	//char l1[l_bits[0]];
+	//strncpy(l1, ad, l_bits[0]);
+	//printf("%s\n", l1);
+	//quest[0] = strtol(l1, NULL, 2);
+	//printf("%d\n", quest[0]);
+
+	
+
+	int at = 0;
+
+	for (i = 0; i < l; i++) {
+		char li[l_bits[i]];
+		for (j = 0; j < l_bits[i]; j++) {
+			li[j] = ad[at + j];
+		}
+		li[l_bits[i]] = 0;
+		// printf("%d with %s\n", i, li);
+		quest[i] = strtol(li, NULL, 2);
+		// printf("%d with %d\n", i, quest[i]);
+		at += l_bits[i];
+	}
+
+}
+
+
 
 
 int main(int argc, char const *argv[])
@@ -319,12 +334,18 @@ int main(int argc, char const *argv[])
 	//
 
 	// TLB
+	tlbrow** TLB = calloc(64, sizeof(tlbrow*));
+	for (i = 0; i < 64; i++) {
+		TLB[i] = create_tlb_row();
+	}
 
 
 	int q[levels];
-	for (i = 0; i < levels; i++) {
-		q[i] = 0;
-	}
+	// for (i = 0; i < levels; i++) {
+	// 	q[i] = 0;
+	// }
+
+
 	// q[4] = 1;
 	// printf("ok\n");
 	// printf("%d\n", tn1[0] -> frame);
@@ -336,38 +357,88 @@ int main(int argc, char const *argv[])
 	// printf("ok\n");
 
 
+	// char* addr = malloc(sizeof(char)*28);
+	// int_to_bin_char(35363, addr);
 
-	// int v_dir = int_to_int(268435455);
-	// dir_off_split(v_dir);
+	// char* direct = malloc(sizeof(char)*20);
+	// char* offset = malloc(sizeof(char)*8);
+	//dir_off_split(direct, offset, addr);
+	// printf("%s\n", addr);
+	// printf("%s\n", direct);
+	// printf("%s\n", offset);
+
+	//split_in_levels(direct, levels, levels_bits, q);
+
+	// free(addr);
+	// free(direct);
+	// free(offset);
+	// free(divided);
+
+	FILE* fp;
+	char* line = NULL;
+	size_t len = 0;
+	ssize_t read;
+	fp = fopen(filename, "r");
+
+	int frm;
+	int offst;
+	int found;
+
+	int tlbhits = 0;
+	int page_faults = 0;
+
+	while ((read = getline(&line, &len, fp)) != -1) {
+
+		found = 0;
+
+		printf("%d\n", atoi(line));
+
+		char* addr = malloc(sizeof(char)*28);
+		int_to_bin_char(atoi(line), addr);
+
+		char* direct = malloc(sizeof(char)*20);
+		char* offset = malloc(sizeof(char)*8);
+		dir_off_split(direct, offset, addr);
+		printf("%s\n", addr);
+		printf("%s\n", direct);
+		printf("%s\n", offset);
+
+		offst = strtol(offset, NULL, 2);
+
+		for (i = 0; i < 64; i++) {
+			tlbrow* tlbr = TLB[i];
+			if (tlbr -> valid == 1 && tlbr -> address == direct) {
+				frm = tlbr -> frame;
+				found = 1;
+				tlbhits += 1;
+				continue;
+			}
+		}
+
+		if (!found) {
+			split_in_levels(direct, levels, levels_bits, q);
+			row* entry = leaf(tn1, levels, q);
+			if (entry -> valid == 1) {
+				frm = entry -> frame;
+				found = 1;
+				// for (i = 0; i < 64)
+			}
+		}
+
+		if (!found) {
+			page_faults += 1;
+			// BUSCAR EN DATA.BIN
+		}
 
 
-	unsigned long addr = 268435455;
-	printf("%ld\n", int_to_int(268435));
-	
-	// char ad[] = "0000000000000000000000000000";
-	char* ad = malloc(sizeof(char)*28);
-	for (i = 0; i < 28; i++) {
-		ad[i] = '0';
+
+
+		free(addr);
+		free(direct);
+		free(offset);
 	}
-	printf("%s\n", ad);
-	printf("%c\n", ad[4]);
-	ad[4] = '1';
-	printf("%s\n", ad);
-	printf("%c\n", ad[4]);
-
-	printf("%d\n",  5 % 2);
-	printf("%d\n",  (5 - (5 % 2)) / 2);
-
-	char* bin = malloc(sizeof(char)*28);
-	char* direcc = int_to_bin_char(35363, bin);
-	
-
-
 
 	free_tree(tn1, levels, levels_bits);
-
-	
-	
 
 	return 0;
 }
