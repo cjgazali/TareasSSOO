@@ -35,7 +35,7 @@ tarea* crear_tarea(char* linea) {
 		count ++;
 	}
 	//printf("%d \n", count);
-	task -> argv = malloc(sizeof(char)*(count-1));
+	task -> argv = malloc(sizeof(char*)*(count-1));
 	task -> num_args = count-1;
 	//printf("%s", linea);
 
@@ -53,7 +53,7 @@ tarea* crear_tarea(char* linea) {
     task -> intentos = 0;
     //printf("Comando: %s\n", task -> cmd);
     //printf("Argumentos: \n");
-    int i;
+    //int i;
     //int length;
     //length = sizeof(task->argv) / sizeof(task->argv[0]);
     //printf("Largo %d\n", count);
@@ -68,7 +68,7 @@ void endfree() {
     // rellenar
 }
 
-void main(int argc, char const *argv[])
+int main(int argc, char const *argv[])
 {
     int n = atoi(argv[2]);
     const char* filename = argv[1];
@@ -85,7 +85,7 @@ void main(int argc, char const *argv[])
     	contador++;
     } 
     printf("%d comandos\n", contador);
-    lista = malloc((contador-1)*sizeof(tarea));
+    lista = malloc((contador-1)*sizeof(tarea*));
     fclose(fp);
     if (line){
         free(line);
@@ -99,15 +99,16 @@ void main(int argc, char const *argv[])
     fp = fopen(filename, "r");
     while ((read2 = getline(&line, &len, fp)) != -1) {
     	//lista = calloc(contador, sizeof(tarea));
-    	printf("READ %s %d", line, contador);
+    	printf("READ %s %d\n", line, contador);
         lista[contador] = crear_tarea(line);
         //execvp(lista[contador]->cmd, lista[contador]->argv);
         //printf("%s uf %s\n", crear_tarea(line)->cmd, lista[contador]->cmd);
         
         // OJO DE ACÁ EN ADELANTE
         printf("Comando: %s\n", lista[0] -> cmd);
-        printf("%s ", lista[contador] -> argv[1]);
-        printf("%d", contador);
+        printf("%s \n", lista[0] -> argv[1]);
+        printf("%s \n", lista[contador] -> argv[1]);
+        printf("%d\n", contador);
         //printf("\n");
         contador++;
         // después de cada vuelta se cambian los atributos de todas las listas...
@@ -137,4 +138,6 @@ void main(int argc, char const *argv[])
 
 
     //endfree();
+
+    return 0;
 }
