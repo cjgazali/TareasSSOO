@@ -87,9 +87,80 @@ row* create_row() {
 	return r;
 }
 
-void create_and_assign(row* r, row** t) {
-	r = create_row();
+row* create_and_assign(row** t) {
+	row* r = create_row();
 	r -> table = t;
+	return r;
+}
+
+void free_tree(row** root, int levels, int *levels_bits) {
+	row** t2;
+	row** t3;
+	row** t4;
+	row** t5;
+	row* rl1;
+	row* rl2;
+	row* rl3;
+	row* rl4;
+	for (i = 0; i < pow(2, levels_bits[0]); i++) {
+		rl1 = root[i];
+		if (levels > 1) {
+			printf("in if\n");
+			printf("%d\n", rl1 -> valid);
+			// printf("%d\n", rl1 -> table);
+			t2 = rl1 -> table;
+			printf("in if\n");
+			for (j = 0; j < pow(2, levels_bits[1]); j++) {
+				printf("in for 2\n");
+				rl2 = t2[j];
+				if (levels > 2) {
+					t3 = rl2 -> table;
+					for (k = 0; k < pow(2, levels_bits[2]); k++) {
+						rl3 = t3[k];
+						if (levels > 3) {
+							t4 = rl3 -> table;
+							for (m = 0; m < pow(2, levels_bits[3]); m++) {
+								rl4 = t4[m];
+								if (levels > 4) {
+									t5 = rl4 -> table;
+									for (n = 0; n < pow(2, levels_bits[4]); n++) {
+										printf("deep\n");
+										free(t5[j]);
+										printf("deep**\n");
+									}
+									free(t5);
+								}
+								free(rl4);
+							}
+							free(t4);
+						}
+						free(rl3);
+					}
+					free(t3);
+				}
+				printf("free rl2\n");
+				free(rl2);
+			}
+			printf("free t2\n");
+			free(t2);
+		}
+		printf("free rl1\n");
+		free(rl1);
+	}
+	printf("free root\n");
+	free(root);
+}
+
+row* leaf(row** root, int l, int *input) {
+	row** current = root;
+	for (i = 0; i < (l - 1); i++) {
+		//printf("here %d\n", i);
+		//printf("%d\n", input[i]);
+		//printf("%d\n", current[input[i]]);
+		//printf("%d\n", current[input[i]] -> frame);
+		current = current[input[i]] -> table;
+	}
+	return current[input[l - 1]];
 }
 
 
@@ -140,21 +211,24 @@ int main(int argc, char const *argv[])
 	for (i = 0; i < pow(2, levels_bits[0]); i++) {
 		if (levels > 1) {
 			row** tn2 = calloc(pow(2, levels_bits[1]), sizeof(row*));
-			create_and_assign(tn1[i], tn2);
+			tn1[i] = create_and_assign(tn2);
 			for (j = 0; j < pow(2, levels_bits[1]); j++) {
 				if (levels > 2) {
 					row** tn3 = calloc(pow(2, levels_bits[2]), sizeof(row*));
-					create_and_assign(tn2[j], tn3);
+					tn2[j] = create_and_assign(tn3);
+					// printf("here\n");
+					// printf("%d\n", tn2[j] -> frame);
 					for (k = 0; k < pow(2, levels_bits[2]); k++) {
 						if (levels > 3) {
 							row** tn4 = calloc(pow(2, levels_bits[3]), sizeof(row*));
-							create_and_assign(tn3[j], tn4);
+							tn3[k] = create_and_assign(tn4);
 							for (m = 0; m < pow(2, levels_bits[3]); m++) {
 								if (levels > 4) {
 									row** tn5 = calloc(pow(2, levels_bits[3]), sizeof(row*));
-									create_and_assign(tn4[j], tn5);
+									tn4[m] = create_and_assign(tn5);
 									for (n = 0; n < pow(2, levels_bits[4]); n++) {
 										tn5[n] = create_row();
+										tn5[n] -> frame = n;
 									}
 								}
 								else {
@@ -176,6 +250,24 @@ int main(int argc, char const *argv[])
 			tn1[i] = create_row();
 		}
 	}
+
+	
+
+	int q[levels];
+	for (i = 0; i < levels; i++) {
+		q[i] = 0;
+	}
+	// q[4] = 1;
+	// printf("ok\n");
+	// printf("%d\n", tn1[0] -> frame);
+
+	// row* response = leaf(tn1, levels, q);
+	
+	// printf("ok\n");
+	// printf("%d\n", response -> frame);
+	// printf("ok\n");
+
+	// free_tree(tn1, levels, levels_bits);
 
 	return 0;
 }
