@@ -1,7 +1,6 @@
 ls -al
 echo something
-echo algo... >> a.txt
-echo algo_mas... >> a.txt
+touch a.txt
 cat a.txt
 rm a.txt
 cat comandos1.txt
