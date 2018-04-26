@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <stdlib.h>
 
@@ -20,8 +21,6 @@ void update(int l, int *global_min, int *l_bits, int *l_bits_return) {
 		}
 	}
 }
-
-
 
 void efficient_dir(int l, int *l_bits_return) {
 	int l_bits[l];
@@ -74,16 +73,26 @@ void efficient_dir(int l, int *l_bits_return) {
 	// return l_bits_return;
 }
 
+
+// typedef struct TLB {
+// 	int address = -1;
+// 	int 
+// }
+
 typedef struct Row {
 	struct Row** table;
 	int frame;
 	int valid;
+	int extra_bit2;
+	int extra_bit3;
 } row;
 
 row* create_row() {
 	row* r = malloc(sizeof(row));
 	r -> frame = -1;
 	r -> valid = 0;
+	r -> extra_bit2 = 0;
+	r -> extra_bit3 = 0;
 	return r;
 }
 
@@ -105,13 +114,13 @@ void free_tree(row** root, int levels, int *levels_bits) {
 	for (i = 0; i < pow(2, levels_bits[0]); i++) {
 		rl1 = root[i];
 		if (levels > 1) {
-			printf("in if\n");
-			printf("%d\n", rl1 -> valid);
+			// printf("in if\n");
+			// printf("%d\n", rl1 -> valid);
 			// printf("%d\n", rl1 -> table);
 			t2 = rl1 -> table;
-			printf("in if\n");
+			// printf("in if\n");
 			for (j = 0; j < pow(2, levels_bits[1]); j++) {
-				printf("in for 2\n");
+				// printf("in for 2\n");
 				rl2 = t2[j];
 				if (levels > 2) {
 					t3 = rl2 -> table;
@@ -138,13 +147,13 @@ void free_tree(row** root, int levels, int *levels_bits) {
 					}
 					free(t3);
 				}
-				printf("free rl2\n");
+				// printf("free rl2\n");
 				free(rl2);
 			}
-			printf("free t2\n");
+			// printf("free t2\n");
 			free(t2);
 		}
-		printf("free rl1\n");
+		// printf("free rl1\n");
 		free(rl1);
 	}
 	printf("free root\n");
@@ -154,13 +163,42 @@ void free_tree(row** root, int levels, int *levels_bits) {
 row* leaf(row** root, int l, int *input) {
 	row** current = root;
 	for (i = 0; i < (l - 1); i++) {
-		//printf("here %d\n", i);
-		//printf("%d\n", input[i]);
-		//printf("%d\n", current[input[i]]);
-		//printf("%d\n", current[input[i]] -> frame);
 		current = current[input[i]] -> table;
 	}
 	return current[input[l - 1]];
+}
+
+unsigned long int_to_int(unsigned long k) {
+    if (k == 0) return 0;
+    if (k == 1) return 1;                       /* optional */
+    return (k % 2) + 10 * int_to_int(k / 2);
+}  // at https://stackoverflow.com/questions/5488377/converting-an-integer-to-binary-in-c
+
+char* long_to_binary(unsigned long k)
+
+{
+        static char c[28];
+        c[0] = '\0';
+
+        unsigned long val;
+        for (val = 1UL << (sizeof(unsigned long)*8-1); val > 0; val >>= 1)
+        {   
+            strcat(c, ((k & val) == val) ? "1" : "0");
+        }
+        return c;
+}
+
+int* dir_off_split(int addr) {
+	printf("%d\n", addr);
+	char str[256];
+	sprintf(str, "%d", addr);  // to char bin
+	char dir[256];
+	strncpy(dir, str, 20);  // slice firsts
+	dir[10] = 0; // null terminate destination
+	printf("%s\n", dir);
+	int cut = strtol(dir, NULL, 2);
+	printf("%d\n", cut);
+	printf("%d\n", addr - (cut * pow(10, 8)));
 }
 
 
@@ -178,7 +216,7 @@ int main(int argc, char const *argv[])
     int levels_bits[levels];
     // efficient_dir(levels, levels_bits);  //// DOOOOO
 
-    if (levels == 1) {
+    if (levels == 1) {  // REMOOOOVE
     	levels_bits[0] = 20;
     }
     else if (levels == 2) {
@@ -205,6 +243,7 @@ int main(int argc, char const *argv[])
     }
 
 
+    //// construcción de niveles
 
     row** tn1 = calloc(pow(2, levels_bits[0]), sizeof(row*));
     
@@ -250,8 +289,10 @@ int main(int argc, char const *argv[])
 			tn1[i] = create_row();
 		}
 	}
+	//
 
-	
+	// TLB
+
 
 	int q[levels];
 	for (i = 0; i < levels; i++) {
@@ -267,7 +308,22 @@ int main(int argc, char const *argv[])
 	// printf("%d\n", response -> frame);
 	// printf("ok\n");
 
+
+
+	// int v_dir = int_to_int(268435455);
+	// dir_off_split(v_dir);
+
+
+	unsigned long addr = 268435455;
+	printf("%ld\n", int_to_int(268435455));
+	
+
+
+
 	free_tree(tn1, levels, levels_bits);
+
+	
+	
 
 	return 0;
 }
