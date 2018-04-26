@@ -262,12 +262,12 @@ int main(int argc, char const *argv[])
 	// printf("%d\n", tn1[0] -> frame);
 
 	// row* response = leaf(tn1, levels, q);
-	
+
 	// printf("ok\n");
 	// printf("%d\n", response -> frame);
 	// printf("ok\n");
 
-	// free_tree(tn1, levels, levels_bits);
+	free_tree(tn1, levels, levels_bits);
 
 	return 0;
 }
