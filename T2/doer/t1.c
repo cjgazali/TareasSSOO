@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <string.h>
+#include <time.h>
+//time_t mi_tiempo = time(NULL);
 
 typedef struct tarea {
     char *cmd; // la tarea misma, que sale del texto
@@ -13,6 +15,8 @@ typedef struct tarea {
     int exit_code;
     char** argv; // los argumentos
 } tarea;
+// falta tiempo de cada tipo...
+// --------------------------------------------
 
 tarea* crear_tarea(char* linea) {
 
@@ -42,12 +46,37 @@ tarea* crear_tarea(char* linea) {
 		count ++;
 	}
 
+	//Hay problemas con cat, ls y sleep cuando no son el último comando
+	// -------------------------------------------------------------
+
     task -> intentos = 0;
+
     return task;
 }
 
-void endfree() {
-    // rellenar
+void mostrar_tarea(tarea* task){
+	int i=0;
+	printf("Mostrando comandos tarea");
+	for (i=0; i<task->num_args ;i++){
+		printf("%s ", task->argv[i]);
+	}
+	printf("\n");
+}
+
+void endfree(tarea** list, int num_tasks) {
+	int m=0;
+	int l=0;
+	for (m=0; m<num_tasks; m++){
+		free(list[m]->cmd); //free cmd
+		for (l=0; l<(list[m]->num_args); l++){
+			free(list[m]->argv[l]); //free argv[i]
+		free(list[m]->argv);
+		free(list[m]);
+		}
+	}
+	free(list);
+    // muchos errores al hacer free...
+    // ----------------------------------------
 }
 
 int main(int argc, char const *argv[])
@@ -55,6 +84,7 @@ int main(int argc, char const *argv[])
     int n = atoi(argv[2]);
     const char* filename = argv[1];
     tarea** lista;
+    printf("Máximo %d al mismo tiempo\n", n);
 
     // contar líneas
     FILE* fp;
@@ -66,46 +96,47 @@ int main(int argc, char const *argv[])
     while ((read = getline(&line, &len, fp)) != -1) {
     	contador++;
     } 
-    printf("%d comandos\n", contador);
+    printf("%d comandos en total\n", contador);
     lista = malloc((contador-1)*sizeof(tarea*));
     fclose(fp);
     if (line){
         free(line);
     }
 
+
     // leer archivo y hacer tareas
+    int trampa=contador;
     contador=0;
     line = NULL;
     len = 0;
     ssize_t read2;
     fp = fopen(filename, "r");
     while ((read2 = getline(&line, &len, fp)) != -1) {
-    	printf("%d ", contador);
-    	printf("READ %s", line);
+    	//printf("%d ", contador);
+    	//printf("READ %s", line);
+    	if ((contador+1) != trampa) {
+			line[strlen(line)-1]=0;
+		}
         lista[contador] = crear_tarea(line); 
         contador++;
-    } 
+    }
     fclose(fp);
     if (line){
         free(line);
     }
 
+    //mostrar_tarea(lista[0]);
+    //mostrar_tarea(lista[1]);
+    //mostrar_tarea(lista[2]);
+    //sleep(5);
+
     int i = 0;
     int j = 0;
-    printf("\n");
-    for (i=0; i<contador; i++){
-    	printf("Comando: %s\n", lista[i]->cmd);
-    	printf("Palabras: ");
-    	for (j=0; j<(lista[i]->num_args); j++){
-    		printf("%d: %s, ", j, lista[i]->argv[j]);
-    	}
-    	printf("\n");
-    }
 
     int ejecutando=0;
     for (i=0; i<contador; i++){
     	int status;
-    	//chequear que no llevo dos intentos
+    	
     	ejecutando++;
     	lista[i]->intentos ++;
     	int identificador = fork();
@@ -118,7 +149,7 @@ int main(int argc, char const *argv[])
     	lista[i]->pid = identificador;
     	sleep(1);
 		if (ejecutando >= n){ //estoy a tope
-			printf("A tope\n");
+			printf("\nA tope\n");
 			int aux_id=0;
 			aux_id = wait(&status); //espero 
 			printf("Esperamos...\n");
@@ -129,6 +160,8 @@ int main(int argc, char const *argv[])
 				if (lista[j]->pid == aux_id) {
 					lista[j]->exit_code = status;
 					printf("Terminó proceso %d con status %d\n", lista[j]->pid, lista[j]->exit_code);
+					//chequear que no llevo dos intentos
+    				// ------------------------------------------------------------
 					ejecutando --;
 				}
 			}
@@ -139,24 +172,31 @@ int main(int argc, char const *argv[])
     // ya eché a correr todos, hago waits
     sleep(1);
     printf("\nAhora hacemos los waits...\n");
+    while (ejecutando>0){
 
-    int k=0;
-	int aux_id=0;
-	int status=0;
-	aux_id = wait(&status); //espero
-	for (k=0; k<ejecutando; k++){
-		int j;
-		//printf("Entramos al for\n");
-		for (j=0; j<contador; j++){
-			//printf("Buscando %d, revisando %d", aux_id, lista[j]->pid);
-			if (lista[j]->pid == aux_id) {
-				lista[j]->exit_code = status;
-				printf("Terminó proceso %d con status %d\n", lista[j]->pid, lista[j]->exit_code);
-			}
-		}	
+    	int k=0;
+		int aux_id=0;
+		int status=0;
+		aux_id = wait(&status); 
+		sleep(1);
+		for (k=0; k<ejecutando; k++){
+			int j;
+			for (j=0; j<contador; j++){
+				if (lista[j]->pid == aux_id) {
+					lista[j]->exit_code = status;
+					printf("Terminó proceso %d con status %d\n", lista[j]->pid, lista[j]->exit_code);
+					//chequear que no llevo dos intentos
+    				// ------------------------------------------------------------
+					ejecutando--;
+					j=contador; //fuerzo la salida
+				}
+			}	
+		}
 	}
 
-    //endfree();
+	//printf("%d", trampa);
+    endfree(lista, trampa);
+    // -----------------------------------------------------------
 
     return 0;
 }

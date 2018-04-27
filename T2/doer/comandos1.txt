@@ -1,5 +1,7 @@
-echo something
 touch a.txt
-echo something_else
+touch b.txt
+touch c.txt
+rm c.txt
 rm a.txt
-cat comandos1.txt
+rm b.txt
+ls -al
