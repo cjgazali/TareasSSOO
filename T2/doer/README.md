@@ -1,0 +1,1 @@
+comandos1.txt y comandos2.txt son ejemplos en que todos los comandos funcionan, y se ve un poco cómo va avanzando el programa
