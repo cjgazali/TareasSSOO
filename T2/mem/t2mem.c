@@ -74,19 +74,6 @@ void efficient_dir(int l, int *l_bits_return) {
 	// return l_bits_return;
 }
 
-typedef struct RAMrow {
-	char* frame[256];
-	int at_tlb;
-	int at_pt;
-} ramrow;
-
-ramrow* create_mem_row() {
-	ramrow* m = malloc(sizeof(ramrow));
-	m -> at_tlb = -1;
-	m -> at_pt = -1;
-	return m;
-}
-
 typedef struct TLBRow {
 	int address;
 	int frame;
@@ -122,6 +109,21 @@ row* create_and_assign(row** t) {
 	row* r = create_row();
 	r -> table = t;
 	return r;
+}
+
+typedef struct RAMrow {
+	char frame[256];
+	int valid;
+	int at_tlb;
+	row* at_pt;
+	time_t timestamp;
+} ramrow;
+
+ramrow* create_mem_row() {
+	ramrow* m = malloc(sizeof(ramrow));
+	m -> valid = 0;
+	m -> at_tlb = -1;
+	return m;
 }
 
 void free_tree(row** root, int levels, int *levels_bits) {
@@ -265,7 +267,29 @@ void update_tlb_row(tlbrow* r, int adn, int f) {
 	r -> address = adn;
 }
 
-int tlb_LRU_insert(tlbrow** buff, int adn, int f) {
+//void update_ram_row()
+
+int get_LRU_frame(ramrow** m) {
+	ramrow* current;
+	for (i = 0; i < 256; i++) {
+		current = m[i];
+		if (current -> valid == 0) {
+			return i;
+		}
+	}
+	int lru = 0;
+	time_t min_time = time(NULL) + 100;
+	for (i = 0; i < 256; i++) {
+		current = m[i];
+		if (current -> timestamp < min_time) {
+			min_time = current -> timestamp;
+			lru = i;
+		}
+	}
+	return lru;
+}
+
+int tlb_LRU_insert(tlbrow** buff, int adn, int f, ramrow** m) {
 	tlbrow* current;
 	for (i = 0; i < 64; i++) {
 		current = buff[i];
@@ -283,6 +307,7 @@ int tlb_LRU_insert(tlbrow** buff, int adn, int f) {
 			lru = i;
 		}
 	}
+	m[buff[lru] -> frame] -> at_tlb = -1;
 	update_tlb_row(buff[lru], adn, f);
 	return lru;
 }
@@ -435,9 +460,15 @@ int main(int argc, char const *argv[])
 	int offst;
 	int found;
 	// int i_tlb;
+	row* entry;
 
 	int tlbhits = 0;
 	int page_faults = 0;
+
+	char buffer[256];  // unsigned?
+	FILE* data;
+	data = fopen("data.bin", "r");
+	int page;
 
 	while ((read = getline(&line, &len, fp)) != -1) {
 
@@ -445,11 +476,11 @@ int main(int argc, char const *argv[])
 
 		printf("%d\n", atoi(line));
 
-		char* addr = malloc(sizeof(char)*28);
+		char* addr = calloc(28, sizeof(char));
 		int_to_bin_char(atoi(line), addr);
 
-		char* direct = malloc(sizeof(char)*20);
-		char* offset = malloc(sizeof(char)*8);
+		char* direct = calloc(20, sizeof(char));
+		char* offset = calloc(8, sizeof(char));
 		dir_off_split(direct, offset, addr);
 
 		printf("%s\n", addr);
@@ -474,21 +505,75 @@ int main(int argc, char const *argv[])
 
 		if (!found) {
 			split_in_levels(direct, levels, levels_bits, q);
-			row* entry = leaf(tn1, levels, q);
+			entry = leaf(tn1, levels, q);
 			if (entry -> valid == 1) {
 				frm = entry -> frame;
 				found = 1;
-				mem[frm] -> at_tlb = tlb_LRU_insert(TLB, directn, frm);
+				mem[frm] -> at_tlb = tlb_LRU_insert(TLB, directn, frm, mem);
 			}
 		}
 
 		if (!found) {
+			printf("page fault\n");
 			page_faults += 1;
-			// leer data.bin
 
-			// eventualmente:
-			// mem[frm] -> at_tlb = tlb_LRU_insert(TLB, directn, frm);
-			// mem[frm] -> at_pt = directn;
+			// lee data.bin
+			page = directn * pow(2, 8);
+			fseek(data, page, SEEK_SET);
+			int n_bytes = fread(buffer, 1, 256, data);
+			printf("read %d\n", n_bytes);
+			
+			// obtiene frame a usar con LRU si es necesario
+
+			// frm = get_LRU_frame(mem);
+			int do_lru = 1;
+			ramrow* current;
+			for (i = 0; i < 256; i++) {
+				current = mem[i];
+				if (current -> valid == 0) {
+					frm = i;
+					do_lru = 0;
+					break;
+				}
+			}
+			if (do_lru) {
+				int lru = 0;
+				time_t min_time = time(NULL) + 100;
+				for (i = 0; i < 256; i++) {
+					current = mem[i];
+					if (current -> timestamp < min_time) {
+						min_time = current -> timestamp;
+						frm = i;
+					}
+				}
+				// invalida entrada de tabla de páginas que usó ese frame
+				row* prev_entry = mem[frm] -> at_pt;
+				// char prev_direct[20];
+				// int_to_bin_char(prev_pt, prev_direct);
+				// printf("prev pt %d\n", prev_pt);
+				// printf("prev direct %s\n", prev_direct);
+				// split_in_levels(prev_direct, levels, levels_bits, q);  // CAMBIA Q!!!
+				// row* prev_entry = leaf(tn1, levels, q);
+				prev_entry -> valid = 0;
+			}
+			
+			printf("frame %d\n", frm);
+
+			ramrow* current_frame = mem[frm];
+			current_frame -> valid = 1;
+			current_frame -> timestamp = time(NULL);
+
+			// actualiza entrada
+			entry -> valid = 1;
+			entry -> frame = frm;
+			// referencia en frame
+			current_frame -> at_pt = entry;
+
+			// actualiza tlb y referencia en frame
+			current_frame -> at_tlb = tlb_LRU_insert(TLB, directn, frm, mem);
+			printf("at tlb %d\n", current_frame -> at_tlb);
+
+			// current_frame -> frame
 		}
 
 
@@ -498,6 +583,9 @@ int main(int argc, char const *argv[])
 		free(direct);
 		free(offset);
 	}
+
+	fclose(fp);
+	fclose(data);
 
 	free_tree(tn1, levels, levels_bits);
 
