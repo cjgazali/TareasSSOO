@@ -1,0 +1,25 @@
+echo empezamos
+touch hola.txt
+cat comandos2.txt
+ls -al
+rm hola.txt
+qwerty
+sleep 10
+ls-al
+echo terminaste
+
+tarea->cmd
+tarea*
+tarea->argv
+tareas->agrv[i]
+lista
+
+==8330== HEAP SUMMARY:
+==8330==     in use at exit: 48 bytes in 1 blocks
+==8330==   total heap usage: 43 allocs, 70 frees, 11,168 bytes allocated
+==8330== 
+==8330== LEAK SUMMARY:
+==8330==    definitely lost: 48 bytes in 1 blocks
+
+
+

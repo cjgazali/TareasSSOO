@@ -1,0 +1,3 @@
+cat comandos1.txt
+cat comandos2.txt
+cat comandos3.txt
