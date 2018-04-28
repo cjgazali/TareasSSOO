@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdlib.h>
+#include <time.h>
 
 int i, j, k, m, n, o;
 
@@ -73,11 +74,24 @@ void efficient_dir(int l, int *l_bits_return) {
 	// return l_bits_return;
 }
 
+typedef struct RAMrow {
+	char* frame[256];
+	int at_tlb;
+	int at_pt;
+} ramrow;
+
+ramrow* create_mem_row() {
+	ramrow* m = malloc(sizeof(ramrow));
+	m -> at_tlb = -1;
+	m -> at_pt = -1;
+	return m;
+}
 
 typedef struct TLBRow {
-	char address[20];
+	int address;
 	int frame;
 	int valid;
+	time_t timestamp;
 } tlbrow;
 
 tlbrow* create_tlb_row() {
@@ -87,7 +101,7 @@ tlbrow* create_tlb_row() {
 	return t;
 }
 
-typedef struct Row {
+typedef struct Row {  // de tabla de páginas
 	struct Row** table;
 	int frame;
 	int valid;
@@ -196,15 +210,17 @@ char* int_to_bin_char(int num, char* bin) {
 		}
 		i++;
 	}
+	bin[28] = 0;
 	return bin;
 }
 
 void dir_off_split(char* left, char* right, char* all) {
 	strncpy(left, all, 20);  // slice firsts
-	// left[20] = 0; // null terminate destination
+	left[20] = 0; // null terminate destination
 	for (i = 0; i < 8; i++) {
 		right[i] = all[20 + i];
 	}
+	right[8] = 0;
 }
 
 void split_in_levels(char* ad, int l, int* l_bits, int* quest) {
@@ -241,7 +257,35 @@ void split_in_levels(char* ad, int l, int* l_bits, int* quest) {
 
 }
 
+void update_tlb_row(tlbrow* r, int adn, int f) {
+	r -> valid = 1;
+	r -> frame = f;
+	r -> timestamp = time(NULL);
+	// int adn = strtol(ad, NULL, 2);
+	r -> address = adn;
+}
 
+int tlb_LRU_insert(tlbrow** buff, int adn, int f) {
+	tlbrow* current;
+	for (i = 0; i < 64; i++) {
+		current = buff[i];
+		if (current -> valid == 0) {
+			update_tlb_row(current, adn, f);
+			return i;
+		}
+	}
+	int lru = 0;
+	time_t min_time = time(NULL) + 100;
+	for (i = 0; i < 64; i++) {
+		current = buff[i];
+		if (current -> timestamp < min_time) {
+			min_time = current -> timestamp;
+			lru = i;
+		}
+	}
+	update_tlb_row(buff[lru], adn, f);
+	return lru;
+}
 
 
 int main(int argc, char const *argv[])
@@ -339,6 +383,13 @@ int main(int argc, char const *argv[])
 		TLB[i] = create_tlb_row();
 	}
 
+	// memoria física
+	ramrow** mem = calloc(256, sizeof(ramrow*));
+	for (i = 0; i < 256; i++) {
+		mem[i] = create_mem_row();
+	}
+
+
 
 	int q[levels];
 	// for (i = 0; i < levels; i++) {
@@ -383,6 +434,7 @@ int main(int argc, char const *argv[])
 	int frm;
 	int offst;
 	int found;
+	// int i_tlb;
 
 	int tlbhits = 0;
 	int page_faults = 0;
@@ -399,17 +451,22 @@ int main(int argc, char const *argv[])
 		char* direct = malloc(sizeof(char)*20);
 		char* offset = malloc(sizeof(char)*8);
 		dir_off_split(direct, offset, addr);
+
 		printf("%s\n", addr);
 		printf("%s\n", direct);
 		printf("%s\n", offset);
 
 		offst = strtol(offset, NULL, 2);
 
+		int directn = strtol(direct, NULL, 2);
+
 		for (i = 0; i < 64; i++) {
 			tlbrow* tlbr = TLB[i];
-			if (tlbr -> valid == 1 && tlbr -> address == direct) {
+			if (tlbr -> valid == 1 && tlbr -> address == directn) {
 				frm = tlbr -> frame;
+				tlbr -> timestamp = time(NULL);
 				found = 1;
+				// i_tlb = i;
 				tlbhits += 1;
 				continue;
 			}
@@ -421,13 +478,17 @@ int main(int argc, char const *argv[])
 			if (entry -> valid == 1) {
 				frm = entry -> frame;
 				found = 1;
-				// for (i = 0; i < 64)
+				mem[frm] -> at_tlb = tlb_LRU_insert(TLB, directn, frm);
 			}
 		}
 
 		if (!found) {
 			page_faults += 1;
-			// BUSCAR EN DATA.BIN
+			// leer data.bin
+
+			// eventualmente:
+			// mem[frm] -> at_tlb = tlb_LRU_insert(TLB, directn, frm);
+			// mem[frm] -> at_pt = directn;
 		}
 
 
