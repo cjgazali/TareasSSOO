@@ -3,88 +3,93 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdlib.h>
-#include <time.h>
+// #include <time.h>
 
 int i, j, k, m, n, o;
 
 
 void update(int l, int *global_min, int *l_bits, int *l_bits_return) {
 	int local_min = 0;
-	for (n = 0; n < l - 1; n++) {
-		local_min += pow(2, l_bits[j]);
+	for (o = 0; o < l - 1; o++) {
+		local_min += pow(2, l_bits[o]) * l_bits[o + 1];
 	}
-	local_min += pow(2, l_bits[l - 1]) * 1.375;
+	local_min += pow(2, l_bits[l - 1]) * 11;
 	if (local_min < *global_min) {
-		printf("update!\n");
+		// printf("update!\n");
 		*global_min = local_min;
-		for (j = 0; j < l; j++) {
-			l_bits_return[j] = l_bits[j];
+		for (o = 0; o < l; o++) {
+			l_bits_return[o] = l_bits[o];
+			// printf("%d ", l_bits[o]);
 		}
+		// printf("\n");
 	}
 }
 
-void efficient_dir(int l, int *l_bits_return) {
+int efficient_dir(int l, int *l_bits_return) {
+
+	int global_min = 2147483647;
 	int l_bits[l];
+
 	if (l == 1) {
 		l_bits_return[0] = 20;
-		return;
+		global_min = pow(2, 20) * 11;
+		return global_min;
 	}
-	int global_min = 2147483647;
-	
+
 	for (i = 1; i < 20; i++) {
 		l_bits[0] = i;
-		if (l == 2) {
-			l_bits[1] = 20 - i;
-			update(l, &global_min, l_bits, l_bits_return);
-		}
-		else {
-			for (j = 1; j < 20 - i + 1; j++) {
-				l_bits[1] = j;
-				// printf("%d\n", j);
-				if (l == 3 && i + j < 20) {
-					l_bits[2] = 20 - i - j;
-					// printf("%d %d %d\n", l_bits[0], l_bits[1], l_bits[2]);
-					update(l, &global_min, l_bits, l_bits_return);
-					// printf("%d\n", j);
-				}
-				else {
-					// printf("raro\n");
-					for (k = 1; k < 20 - i - j + 1; k++) {
-						l_bits[2] = k;
-						if (l == 4) {
-							l_bits[3] = 20 - i - j - k;
-							update(l, &global_min, l_bits, l_bits_return);
-						}
-						else {
-							for (m = 1; m < 20 - i - j - k + 1; m++) {
-								l_bits[3] = m;
-								l_bits[4] = 20 - i - j - k - m;
-								update(l, &global_min, l_bits, l_bits_return);
+		for (j = 1; j < 20; j++) {
+			l_bits[1] = j;
+			if (l > 2) {
+				for (k = 1; k < 20; k++) {
+					l_bits[2] = k;
+					if (l > 3) {
+						for (m = 1; m < 20; m++) {
+							l_bits[3] = m;
+							if (l > 4) {
+								for (n = 1; n < 20; n++) {
+									l_bits[4] = n;
+									if (i + j + k + m + n == 20) {
+										update(l, &global_min, l_bits, l_bits_return);
+									}
+								}
+							}
+							else {
+								if (i + j + k + m == 20) {
+									update(l, &global_min, l_bits, l_bits_return);
+								}
 							}
 						}
 					}
+					else {
+						if (i + j + k == 20) {
+							update(l, &global_min, l_bits, l_bits_return);
+						}
+					}
 				}
-				// printf("%d\n", j);
-				// printf("bien\n");
-
+			}
+			else {
+				if (i + j == 20) {
+					update(l, &global_min, l_bits, l_bits_return);
+				}
 			}
 		}
-		
 	}
-	// return l_bits_return;
+	return global_min;
 }
 
 typedef struct TLBRow {
 	int address;
 	int frame;
 	int valid;
-	time_t timestamp;
+	int timestamp;
 } tlbrow;
 
 tlbrow* create_tlb_row() {
 	tlbrow* t = malloc(sizeof(tlbrow));
 	t -> frame = -1;
 	t -> valid = 0;
+	t -> timestamp = 0;
 	return t;
 }
 
@@ -112,17 +117,18 @@ row* create_and_assign(row** t) {
 }
 
 typedef struct RAMrow {
-	char frame[256];
+	unsigned char frame[256];
 	int valid;
 	int at_tlb;
 	row* at_pt;
-	time_t timestamp;
+	int timestamp;
 } ramrow;
 
 ramrow* create_mem_row() {
 	ramrow* m = malloc(sizeof(ramrow));
 	m -> valid = 0;
 	m -> at_tlb = -1;
+	m -> timestamp = 0;
 	return m;
 }
 
@@ -157,9 +163,7 @@ void free_tree(row** root, int levels, int *levels_bits) {
 								if (levels > 4) {
 									t5 = rl4 -> table;
 									for (n = 0; n < pow(2, levels_bits[4]); n++) {
-										printf("deep\n");
-										free(t5[j]);
-										printf("deep**\n");
+										free(t5[n]);
 									}
 									free(t5);
 								}
@@ -192,10 +196,8 @@ row* leaf(row** root, int l, int *input) {
 	return current[input[l - 1]];
 }
 
-char* int_to_bin_char(int num, char* bin) {
-	// char bin[] = "0000000000000000000000000000";
-	// char* bin = malloc(sizeof(char)*28);
-	for (i = 0; i < 28; i++) {
+char* int_to_bin_char(int num, char* bin, int length) {
+	for (i = 0; i < length; i++) {
 		bin[i] = '0';
 	}
 	int rest;
@@ -205,14 +207,14 @@ char* int_to_bin_char(int num, char* bin) {
 		rest = num % 2;
 		num = (num - rest) / 2;
 		if (rest == 0) {
-			bin[27 - i] = '0';
+			bin[length - 1 - i] = '0';
 		}
 		else {
-			bin[27 - i] = '1';
+			bin[length - 1 - i] = '1';
 		}
 		i++;
 	}
-	bin[28] = 0;
+	bin[length] = 0;
 	return bin;
 }
 
@@ -262,31 +264,9 @@ void split_in_levels(char* ad, int l, int* l_bits, int* quest) {
 void update_tlb_row(tlbrow* r, int adn, int f) {
 	r -> valid = 1;
 	r -> frame = f;
-	r -> timestamp = time(NULL);
+	r -> timestamp = 0;
 	// int adn = strtol(ad, NULL, 2);
 	r -> address = adn;
-}
-
-//void update_ram_row()
-
-int get_LRU_frame(ramrow** m) {
-	ramrow* current;
-	for (i = 0; i < 256; i++) {
-		current = m[i];
-		if (current -> valid == 0) {
-			return i;
-		}
-	}
-	int lru = 0;
-	time_t min_time = time(NULL) + 100;
-	for (i = 0; i < 256; i++) {
-		current = m[i];
-		if (current -> timestamp < min_time) {
-			min_time = current -> timestamp;
-			lru = i;
-		}
-	}
-	return lru;
 }
 
 int tlb_LRU_insert(tlbrow** buff, int adn, int f, ramrow** m) {
@@ -299,11 +279,11 @@ int tlb_LRU_insert(tlbrow** buff, int adn, int f, ramrow** m) {
 		}
 	}
 	int lru = 0;
-	time_t min_time = time(NULL) + 100;
+	int max_time = 0;
 	for (i = 0; i < 64; i++) {
 		current = buff[i];
-		if (current -> timestamp < min_time) {
-			min_time = current -> timestamp;
+		if (current -> timestamp > max_time) {
+			max_time = current -> timestamp;
 			lru = i;
 		}
 	}
@@ -325,33 +305,12 @@ int main(int argc, char const *argv[])
     const char* filename = argv[2];
 
     int levels_bits[levels];
-    // efficient_dir(levels, levels_bits);  //// DOOOOO
-
-    if (levels == 1) {  // REMOOOOVE
-    	levels_bits[0] = 20;
+    float mem_use = efficient_dir(levels, levels_bits);
+    float bytes_used = mem_use / 8;
+    for (i = 0; i < levels; i++) {
+    	printf("BITS NIVEL %d: %d\n", i + 1, levels_bits[i]);
     }
-    else if (levels == 2) {
-    	levels_bits[0] = 10;
-    	levels_bits[1] = 10;
-    }
-    else if (levels == 3) {
-		levels_bits[0] = 7;
-    	levels_bits[1] = 7;
-    	levels_bits[2] = 6;
-    }
-    else if (levels == 4) {
-		levels_bits[0] = 6;
-    	levels_bits[1] = 5;
-    	levels_bits[2] = 5;
-    	levels_bits[3] = 4;
-    }
-    else if (levels == 5) {
-		levels_bits[0] = 5;
-    	levels_bits[1] = 4;
-    	levels_bits[2] = 4;
-    	levels_bits[3] = 6;
-    	levels_bits[4] = 1;
-    }
+    printf("ESPACIO UTILIZADO: %fB\n\n", bytes_used);
 
 
     //// construcción de niveles
@@ -378,7 +337,6 @@ int main(int argc, char const *argv[])
 									tn4[m] = create_and_assign(tn5);
 									for (n = 0; n < pow(2, levels_bits[4]); n++) {
 										tn5[n] = create_row();
-										tn5[n] -> frame = n;
 									}
 								}
 								else {
@@ -414,41 +372,9 @@ int main(int argc, char const *argv[])
 		mem[i] = create_mem_row();
 	}
 
-
+	// preparar simulación
 
 	int q[levels];
-	// for (i = 0; i < levels; i++) {
-	// 	q[i] = 0;
-	// }
-
-
-	// q[4] = 1;
-	// printf("ok\n");
-	// printf("%d\n", tn1[0] -> frame);
-
-	// row* response = leaf(tn1, levels, q);
-
-	// printf("ok\n");
-	// printf("%d\n", response -> frame);
-	// printf("ok\n");
-
-
-	// char* addr = malloc(sizeof(char)*28);
-	// int_to_bin_char(35363, addr);
-
-	// char* direct = malloc(sizeof(char)*20);
-	// char* offset = malloc(sizeof(char)*8);
-	//dir_off_split(direct, offset, addr);
-	// printf("%s\n", addr);
-	// printf("%s\n", direct);
-	// printf("%s\n", offset);
-
-	//split_in_levels(direct, levels, levels_bits, q);
-
-	// free(addr);
-	// free(direct);
-	// free(offset);
-	// free(divided);
 
 	FILE* fp;
 	char* line = NULL;
@@ -462,30 +388,35 @@ int main(int argc, char const *argv[])
 	// int i_tlb;
 	row* entry;
 
-	int tlbhits = 0;
-	int page_faults = 0;
+	float tlbhits = 0.0;
+	float page_faults = 0.0;
+	float total = 0.0;
 
 	char buffer[256];  // unsigned?
 	FILE* data;
 	data = fopen("data.bin", "r");
 	int page;
 
+	// SIMULACIÓN
+
 	while ((read = getline(&line, &len, fp)) != -1) {
+
+		total += 1;
 
 		found = 0;
 
-		printf("%d\n", atoi(line));
+		// printf("%d\n", atoi(line));
 
 		char* addr = calloc(28, sizeof(char));
-		int_to_bin_char(atoi(line), addr);
+		int_to_bin_char(atoi(line), addr, 28);
 
 		char* direct = calloc(20, sizeof(char));
 		char* offset = calloc(8, sizeof(char));
 		dir_off_split(direct, offset, addr);
 
-		printf("%s\n", addr);
-		printf("%s\n", direct);
-		printf("%s\n", offset);
+		// printf("%s\n", addr);
+		// printf("%s\n", direct);
+		// printf("%s\n", offset);
 
 		offst = strtol(offset, NULL, 2);
 
@@ -495,7 +426,7 @@ int main(int argc, char const *argv[])
 			tlbrow* tlbr = TLB[i];
 			if (tlbr -> valid == 1 && tlbr -> address == directn) {
 				frm = tlbr -> frame;
-				tlbr -> timestamp = time(NULL);
+				tlbr -> timestamp = 0;
 				found = 1;
 				// i_tlb = i;
 				tlbhits += 1;
@@ -514,14 +445,14 @@ int main(int argc, char const *argv[])
 		}
 
 		if (!found) {
-			printf("page fault\n");
+			// printf("page fault\n");
 			page_faults += 1;
 
 			// lee data.bin
 			page = directn * pow(2, 8);
 			fseek(data, page, SEEK_SET);
 			int n_bytes = fread(buffer, 1, 256, data);
-			printf("read %d\n", n_bytes);
+			// printf("read %d\n", n_bytes);
 			
 			// obtiene frame a usar con LRU si es necesario
 
@@ -537,31 +468,24 @@ int main(int argc, char const *argv[])
 				}
 			}
 			if (do_lru) {
-				int lru = 0;
-				time_t min_time = time(NULL) + 100;
+				int max_time = 0;
 				for (i = 0; i < 256; i++) {
 					current = mem[i];
-					if (current -> timestamp < min_time) {
-						min_time = current -> timestamp;
+					if (current -> timestamp > max_time) {
+						max_time = current -> timestamp;
 						frm = i;
 					}
 				}
 				// invalida entrada de tabla de páginas que usó ese frame
 				row* prev_entry = mem[frm] -> at_pt;
-				// char prev_direct[20];
-				// int_to_bin_char(prev_pt, prev_direct);
-				// printf("prev pt %d\n", prev_pt);
-				// printf("prev direct %s\n", prev_direct);
-				// split_in_levels(prev_direct, levels, levels_bits, q);  // CAMBIA Q!!!
-				// row* prev_entry = leaf(tn1, levels, q);
 				prev_entry -> valid = 0;
 			}
 			
-			printf("frame %d\n", frm);
+			// printf("frame %d\n", frm);
 
 			ramrow* current_frame = mem[frm];
 			current_frame -> valid = 1;
-			current_frame -> timestamp = time(NULL);
+			current_frame -> timestamp = 0;
 
 			// actualiza entrada
 			entry -> valid = 1;
@@ -571,13 +495,29 @@ int main(int argc, char const *argv[])
 
 			// actualiza tlb y referencia en frame
 			current_frame -> at_tlb = tlb_LRU_insert(TLB, directn, frm, mem);
-			printf("at tlb %d\n", current_frame -> at_tlb);
+			// printf("at tlb %d\n", current_frame -> at_tlb);
 
-			// current_frame -> frame
+			// guarda en memoria la página leída
+			// save_page(new_frame, buffer);
+			unsigned char* new_frame = current_frame -> frame;
+			for (i = 0; i < 256; i++) {
+				new_frame[i] = buffer[i];
+			}
 		}
 
+		for (i = 0; i < 256; i++) {
+			mem[i] -> timestamp += 1;
+		}
+		for (i = 0; i < 64; i++) {
+			TLB[i] -> timestamp += 1;
+		}
 
-
+		// resultados
+		printf("-%d-\n", atoi(line));
+		printf("DIRECCIÓN FÍSICA: %d\n", (frm * 256) + offst);
+		unsigned char* final_frame = mem[frm] -> frame;
+		unsigned char final_char = final_frame[offst];
+		printf("CONTENIDO: %d\n", final_char);
 
 		free(addr);
 		free(direct);
@@ -587,11 +527,44 @@ int main(int argc, char const *argv[])
 	fclose(fp);
 	fclose(data);
 
+	// resultados
+	printf("PORCENTAJE_PAGE_FAULTS = %f%%\n", 100.0 * page_faults / total);
+	printf("PORCENTAJE_TLB_HITS = %f%%\n", 100.0 * tlbhits / total);
+	printf("TLB\n");
+	printf("i\t");
+	for (i = 0; i < levels; i++) {
+		printf("n%d_number\t", i + 1);
+	}
+	printf("frame_number\n");
+	for (o = 0; o < 64; o++) {
+		printf("%d\t", o);
+		tlbrow* current = TLB[o];
+		if (current -> valid == 1) {
+			char row_address[20];
+			int_to_bin_char(current -> address, row_address, 20);
+			split_in_levels(row_address, levels, levels_bits, q);
+			for (j = 0; j < levels; j++) {
+				printf("%d\t\t", q[j]);
+			}
+			printf("%d\n", current -> frame);
+		}
+		else {
+			for (j = 0; j < levels; j++) {
+				printf("-\t\t");
+			}
+			printf("-\n");
+		}
+	}
+
 	free_tree(tn1, levels, levels_bits);
+	for (i = 0; i < 64; i++) {
+		free(TLB[i]);
+	}
+	free(TLB);
+	for (i = 0; i < 256; i++) {
+		free(mem[i]);
+	}
+	free(mem);
 
 	return 0;
 }
-
-
-
-
