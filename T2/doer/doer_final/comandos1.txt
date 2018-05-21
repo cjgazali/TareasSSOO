@@ -1,0 +1,12 @@
+touch a.txt
+touch b.txt
+touch c.txt
+ls
+sleep 3
+cat comandos1.txt
+echo trabajando
+sleep 2
+rm hola.txt
+rm a.txt
+rm b.txt
+rm c.txt
