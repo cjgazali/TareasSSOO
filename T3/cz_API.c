@@ -118,6 +118,8 @@ void build_blocks(FILE* filedesc) {
 }
 
 
+
+// EMPIEZAN LAS CZ_
 int cz_exists(char* filename) {
 	direntry* entry;
 	for (i = 0; i < 64; i++) {
@@ -128,7 +130,6 @@ int cz_exists(char* filename) {
 	}
 	return 0;
 }
-
 
 
 int cz_mv(char* orig, char *dest) {
@@ -161,13 +162,12 @@ void cz_ls() {
 }
 
 
-
 czFILE* cz_open(char* filename, char mode) {
 
 	int exists = 0;
 	for (i = 0; i < 64; i++) {
 		direntry* entry = dir_block[i];
-		if (!strcmp(entry -> name, filename)) {
+		if (entry -> valid && !strcmp(entry -> name, filename)) {
 			exists = 1;
 			break;
 		}
@@ -186,6 +186,46 @@ czFILE* cz_open(char* filename, char mode) {
 		}
 	}
 	return NULL;
+}
+
+
+int cz_cp(char* orig, char* dest){
+	// guardo el índice de orig en indice_orig
+	int indice_orig = 100;
+	for (i = 0; i < 64; i++) {
+		direntry* entry = dir_block[i];
+		if (entry -> valid && !strcmp(entry -> name, filename)) {
+			indice_orig = i;
+			break;
+		}
+	}
+	if (indice_orig == 100){
+		return 1; // no existe el archivo de origen
+	}
+	// reviso que no exista dest
+	if (cz_exists(dest) == 1){
+		return 2; // ya existe dest
+	}
+	// copiar de verdad... RELLENAR
+}
+
+
+int cz_rm (char* filename){
+	if (cz_exists(filename) == 0){
+		return 0; // no existe, no se puede borrar
+	}
+	int indice_file; // índice del archivo a borrar
+	for (i = 0; i < 64; i++) {
+		direntry* entry = dir_block[i];
+		if (entry -> valid && !strcmp(entry -> name, filename)) {
+			indice_file = i;
+			break;
+		}
+	}
+	// dejamos el valid bit en 0
+	dir_bock[indice_file] -> valid = 0;
+	// no debiera ser necesario cambiar el resto de las cosas...
+	// llenar de 0 los content_blocks... RELLENAR
 }
 
 
