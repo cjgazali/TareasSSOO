@@ -39,5 +39,34 @@ int main(int argc, char const *argv[])
 	printf("%d\n", byte & mask);
 	printf("%d\n", (byte & mask) >> pass);
 
+	printf("\n");
+
+	char ch = 'w';
+	if (ch == 'w') {
+		printf("okay\n");
+	}
+
+	printf("\n");
+
+	int num = 65534;
+	unsigned char c1 = num >> 8;
+	printf("%d\n", c1);
+	unsigned char c2 = num;
+	printf("%d\n", c2);
+	unsigned int recover = c1 << 8 | c2;
+	printf("recovered %d\n", recover);
+
+	unsigned int numl = 4294967294;
+	unsigned char ca = numl >> 24;
+	unsigned char cb = numl >> 16;
+	unsigned char cc = numl >> 8;
+	unsigned char cd = numl;
+	printf("%d\n", ca);
+	printf("%d\n", cb);
+	printf("%d\n", cc);
+	printf("%d\n", cd);
+	unsigned int recover1 = ca << 24 | cb << 16 | cc << 8 | cd;
+	printf("recovered %u\n", recover1);
+
 	return 0;
 }
