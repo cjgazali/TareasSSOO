@@ -117,6 +117,17 @@ void build_blocks(FILE* filedesc) {
 
 }
 
+int indice_dir_nombre (char* filename){
+	direntry* entry;
+	for (i = 0; i < 64; i++) {
+		entry = dir_block[i];
+		if (entry -> valid && !strcmp(filename, entry -> name)) {
+			return i;
+		}
+	}
+	return 0;
+}
+
 
 
 // EMPIEZAN LAS CZ_
@@ -190,22 +201,15 @@ czFILE* cz_open(char* filename, char mode) {
 
 
 int cz_cp(char* orig, char* dest){
-	// guardo el índice de orig en indice_orig
-	int indice_orig = 100;
-	for (i = 0; i < 64; i++) {
-		direntry* entry = dir_block[i];
-		if (entry -> valid && !strcmp(entry -> name, orig)) {
-			indice_orig = i;
-			break;
-		}
-	}
-	if (indice_orig == 100){
+	if (!cz_exists(orig)){
 		return 1; // no existe el archivo de origen
 	}
 	// reviso que no exista dest
 	if (!cz_exists(dest)){
 		return 2; // ya existe dest
 	}
+	// guardo el índice de orig en indice_orig
+	int indice_orig = indice_dir_nombre(orig);
 	// copiar de verdad el archivo de índice indice_orig... RELLENAR
 	return 0;
 }
@@ -215,14 +219,7 @@ int cz_rm (char* filename){
 	if (!cz_exists(filename)){
 		return 1; // no existe, no se puede borrar
 	}
-	int indice_file; // índice del archivo a borrar
-	for (i = 0; i < 64; i++) {
-		direntry* entry = dir_block[i];
-		if (entry -> valid && !strcmp(entry -> name, filename)) {
-			indice_file = i;
-			break;
-		}
-	}
+	int indice_file = indice_dir_nombre(filename);
 	// dejamos el valid bit en 0
 	dir_block[indice_file] -> valid = 0;
 	// no debiera ser necesario cambiar el resto de las cosas...
@@ -245,9 +242,9 @@ int main(int argc, char const *argv[])
 	cz_mv("archivo", "hi");
 	cz_ls();
 	printf("%d \n", cz_exists("archivo"));
-	printf("%i \n", cz_rm("no existe"));
-	printf("%i \n", cz_cp("no existe", "archivo")); // no existe orig
-	printf("%i \n", cz_cp("arch", "archivo")); // ya existe dest
+	printf("%i \n", cz_rm("no existe")); // 1, no existe el archivo
+	printf("%i \n", cz_cp("no existe", "archivo")); // 1, no existe orig
+	printf("%i \n", cz_cp("arch", "archivo")); // 2, ya existe dest
 	
 	fclose(ptr);
 
