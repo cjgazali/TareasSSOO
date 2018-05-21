@@ -2,8 +2,8 @@
 
 typedef struct dirBlockEntry {
 	unsigned char valid;
-	unsigned char* name[11];
-	int indexb;
+	char name[11];
+	int index_block;
 } direntry;
 
 // int dir_block_length 64;
