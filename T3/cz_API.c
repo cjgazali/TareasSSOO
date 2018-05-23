@@ -101,6 +101,41 @@ char get_bitmap_bit(unsigned int iblock) {
 }
 
 
+void up_bitmap_bit(unsigned int iblock) {
+	int byte = iblock / 8;
+	char bit = iblock % 8;
+	char up = 7 - bit;  // cuál bit en byte, de izquierda a derecha
+	unsigned char mask = 1 << up;  // máscara OR
+
+	// guarda OR con mask que deja 1 en iblock que era 0
+	bitmap[byte] = bitmap[byte] | mask;
+}
+
+
+void down_bitmap_bit(unsigned int iblock) {
+	int byte = iblock / 8;
+	char bit = iblock % 8;
+	char down = 7 - bit;  // cuál bit en byte, de izquierda a derecha
+	unsigned char mask = 1 << down;  // máscara XOR
+
+	// guarda XOR con mask que deja 0 en iblock que era 1
+	bitmap[byte] = bitmap[byte] ^ mask;
+}
+
+
+int get_first_available() {
+	int ibit;
+	int has_space = 0;
+	for (ibit = 0; ibit < 65536; ibit++) {
+		if (!get_bitmap_bit(ibit)) {
+			has_space = 1;
+			return ibit;
+		}
+	}
+	return -1;
+}
+
+
 void build_blocks(FILE* filedesc) {
 	int n_blocks = 65536 - 9;
 	blocks = calloc(n_blocks, sizeof(block*));
@@ -110,6 +145,12 @@ void build_blocks(FILE* filedesc) {
 	}
 	// printf("read %d blocks\n", n_bytes / 1024);
 }
+
+
+block* get_block(int b) {
+	return blocks[b - 9];
+}
+
 
 int indice_dir_nombre (char* filename){
 	direntry* entry;
@@ -121,6 +162,8 @@ int indice_dir_nombre (char* filename){
 	}
 	return 0;
 }
+
+
 
 
 
@@ -159,17 +202,21 @@ czFILE* cz_open(char* filename, char mode) {
 			}
 
 			// busca primer bloque disponible para bloque índice
-			int ibit;
-			has_space = 0;
-			for (ibit = 0; ibit < 65536; ibit++) {
-				if (!get_bitmap_bit(ibit)) {
-					has_space = 1;
-					break;
-				}
-			}
-			if (!has_space) {
+			int ibit = get_first_available();
+			if (ibit == -1) {
 				return NULL;
 			}
+			up_bitmap_bit(ibit);
+			// has_space = 0;
+			// for (ibit = 0; ibit < 65536; ibit++) {
+			// 	if (!get_bitmap_bit(ibit)) {
+			// 		has_space = 1;
+			// 		break;
+			// 	}
+			// }
+			// if (!has_space) {
+			// 	return NULL;
+			// }
 			// printf("%d\n", ibit);  // si está vacío debería ser 9
 
 			// actualiza valores de entrada de bloque de directorio
@@ -186,7 +233,7 @@ czFILE* cz_open(char* filename, char mode) {
 			time_t now = time(NULL);
 			czfd -> timestamp_create = now;
 			czfd -> timestamp_update = now;
-			czfd -> content_blocks = calloc(508, sizeof(block*));
+			// czfd -> content_blocks = calloc(508, sizeof(block*));
 
 			return czfd;
 		}
@@ -215,18 +262,67 @@ int cz_write(czFILE* file_desc, void* buffer, int nbytes) {
 		return -1;
 	}
 
-	//// set index block
-	// set size bytes
+	// get index block kilobyte
 	char* index_KB = blocks[file_desc -> index_block] -> kilobyte;
-	index_KB[0] = 0;
-	index_KB[1] = 0;
-	index_KB[2] = file_desc -> size >> 8;
-	index_KB[3] = file_desc -> size;
+	//// set index block metadata
+	
 	// set creation timestamp bytes
 	index_KB[4] = file_desc -> timestamp_create >> 24;
 	index_KB[5] = file_desc -> timestamp_create >> 16;
 	index_KB[6] = file_desc -> timestamp_create >> 8;
 	index_KB[7] = file_desc -> timestamp_create;
+
+
+	//// variables útiles:
+	int effective_bytes = 0;  // tamaño guardado de archivo en B, valor de retorno
+	int i_to_fill;  // índice de bloque disponible encontrado
+	// int current_buffer_byte = 0;  // escritura total
+	char* current_kilobyte;  // puntero a KB de bloque disponible
+	int current_kilobyte_byte;  // índice de byte escribiendo en bloque
+	int n_first_level_block = 0;  // # bloques de primer nivel llenados
+	int base;
+
+	//// escritura:  UN NIVEL DE MOMENTO
+	while (effective_bytes < nbytes) {
+
+		i_to_fill = get_first_available();
+		if (i_to_fill == -1) {  // no se puede seguir escribiendo porque no quedan bloques
+			return effective_bytes;
+		}
+		up_bitmap_bit(i_to_fill);
+
+		// file_desc -> content_blocks[0] = blocks[i_to_fill];
+
+		base = 12 + (n_first_level_block * 4);
+		index_KB[base] = i_to_fill >> 24;
+		index_KB[base + 1] = i_to_fill >> 16;
+		index_KB[base + 2] = i_to_fill >> 8;
+		index_KB[base + 3] = i_to_fill;
+
+		current_kilobyte = blocks[i_to_fill] -> kilobyte;
+		current_kilobyte_byte = 0;
+
+		while (current_kilobyte_byte < 1024 && effective_bytes < nbytes) {
+			// current_kilobyte[current_kilobyte_byte] = buffer[effective_bytes];
+			current_kilobyte_byte++;
+			effective_bytes++;
+		}
+	}
+
+
+	////
+	
+	// usar dos niveles si es necesario
+
+	////
+	
+
+	// set size and size metadata bytes
+	file_desc -> size = effective_bytes;
+	index_KB[0] = effective_bytes >> 24;
+	index_KB[1] = effective_bytes >> 16;
+	index_KB[2] = effective_bytes >> 8;
+	index_KB[3] = effective_bytes;
 	// set update timestamp bytes
 	file_desc -> timestamp_update = time(NULL);  // ahora se escribe
 	index_KB[8] = file_desc -> timestamp_update >> 24;
@@ -234,14 +330,7 @@ int cz_write(czFILE* file_desc, void* buffer, int nbytes) {
 	index_KB[10] = file_desc -> timestamp_update >> 8;
 	index_KB[11] = file_desc -> timestamp_update;
 
-	// ir llenando index_KB según se vayan llenando los kilobytes de contenido con el contenido de buffer,
-	// usar dos niveles si es necesario
-	// usar el hecho de que quieren escribir nbytes
-	
-
-
-	
-	return -1;
+	return effective_bytes;
 }
 
 
