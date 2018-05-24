@@ -9,6 +9,10 @@ int z;
 
 int n_bytes;
 
+int n_blocks = 65536 - 9;
+
+FILE* bfd;
+
 typedef struct Block {
 	unsigned char kilobyte[1024];
 } block;
@@ -137,7 +141,6 @@ int get_first_available() {
 
 
 void build_blocks(FILE* filedesc) {
-	int n_blocks = 65536 - 9;
 	blocks = calloc(n_blocks, sizeof(block*));
 	for (i = 0; i < n_blocks; i++) {
 		blocks[i] = calloc(1, sizeof(block));
@@ -258,6 +261,7 @@ czFILE* cz_open(char* filename, char mode) {
 
 
 int cz_write(czFILE* file_desc, void* buffer, int nbytes) {
+
 	if (file_desc -> mode != 'w') {
 		return -1;
 	}
@@ -362,7 +366,48 @@ int cz_write(czFILE* file_desc, void* buffer, int nbytes) {
 }
 
 
-// int cz_close(czFILE* file_desc)
+int cz_close(czFILE* file_desc) {
+	if (file_desc -> mode == 'r') {
+		free(file_desc);
+		return 0;
+	}
+
+	int wbytes;
+	unsigned char wbuffer_entry[16];
+	direntry* entry;
+
+	FILE* testfp = fopen("my.bin", "wb");
+
+	for (i = 0; i < 64; i++) {
+
+		entry = dir_block[i];
+
+		wbuffer_entry[0] = entry -> valid;
+
+		char* name = entry -> name;
+		for (z = 0; z < 11; z++) {
+			wbuffer_entry[z + 1] = name[z];
+		}
+
+		save_int(wbuffer_entry, 12, entry -> index_block);
+
+		wbytes += fwrite(wbuffer_entry, 1, 16, testfp);
+
+	}
+
+	wbytes += fwrite(bitmap, 1, 1024 * 8, testfp);
+
+	for (i = 0; i < n_blocks; i++) {
+		fwrite(blocks[i] -> kilobyte, 1, 1024, testfp);
+	}
+
+
+	fclose(testfp);
+	
+
+	free(file_desc);
+	return 0;
+}
 
 
 int cz_mv(char* orig, char *dest) {
@@ -401,13 +446,16 @@ int cz_cp(char* orig, char* dest){
 
 int cz_rm (char* filename){
 	if (!cz_exists(filename)){
-		return 1; // no existe, no se puede borrar
+		return 1;  // no existe, no se puede borrar
 	}
-	int indice_file = indice_dir_nombre(filename);
+	int idir = indice_dir_nombre(filename);
 	// dejamos el valid bit en 0
-	dir_block[indice_file] -> valid = 0;
-	// no debiera ser necesario cambiar el resto de las cosas...
-	// llenar de 0 los content_blocks... RELLENAR
+	direntry* entry = dir_block[idir];
+	entry -> valid = 0;
+
+	unsigned char* index_KB = get_block(entry -> index_block) -> kilobyte;
+
+
 	return 0;
 }
 
@@ -426,17 +474,29 @@ void cz_ls() {
 int main(int argc, char const *argv[])
 {
 
-	FILE * ptr = fopen("simdiskformat.bin","rb");  // r for read, b for binary
+	bfd = fopen("simdiskformat.bin","r");  // r for read, b for binary
 
-	build_dir_block(ptr);
-	build_bit_map(ptr);
-	build_blocks(ptr);
+	build_dir_block(bfd);
+	build_bit_map(bfd);
+	build_blocks(bfd);
 
-
+	// abre archivo 'newfile' en modo escritura
 	czFILE* fd = cz_open("newfile", 'w');
-	int num = 70000;
-	int bytes_writen = cz_write(fd, &num, sizeof(int));
-	printf("%d\n", bytes_writen);
+
+	// crear buffer para escritura
+	int wbuffer_size = 300;  // ajustar a gusto
+	char c[wbuffer_size * 1024];
+	for (i = 0; i < wbuffer_size * 1024; i++) {
+		c[i] = 'a';  // 0x61
+	}
+
+	// escribe buffer
+	int bytes_writen = cz_write(fd, c, wbuffer_size * 1024);
+
+	printf("KB written: %d\n", bytes_writen / 1024);
+
+	// guarda cambios en .bin
+	//cz_close(fd);
 
 
 	// printf("%d\n", n_bytes / 1024);
@@ -445,7 +505,7 @@ int main(int argc, char const *argv[])
 	// printf("%i \n", cz_cp("no existe", "archivo")); // 1, no existe orig
 	// printf("%i \n", cz_cp("arch", "archivo")); // 2, ya existe dest
 	
-	fclose(ptr);
+	fclose(bfd);
 
 	return 0;
 }
