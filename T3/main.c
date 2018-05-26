@@ -101,7 +101,7 @@ int main(int argc, char const *argv[])
 	// borra archivos: cambios en validez y bitmap pero ruido queda
 	printf("\nREMOVE\n");
 	cz_rm("iFile");
-	// cz_rm("myFile");
+	cz_rm("myFile");
 
 	// muestra lista sin iFile
 	printf("post remove:\n");
