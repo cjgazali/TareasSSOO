@@ -10,6 +10,9 @@ int n_bytes;  // contador para testing
 int n_blocks = 65536 - 9;  // cantidad de bloques en blocks
 char bin_file_name[256];
 
+czFILE* para_borrar[64];
+int contador_a_borrar = 0;
+
 direntry** dir_block;  // bloque de directorio
 unsigned char bitmap[1024 * 8];  // bitmap
 block** blocks;  // todo el resto de los bloques
@@ -166,6 +169,27 @@ int indice_dir_nombre (char* filename) {
 }
 
 
+void liberar() {
+	// printf("Liberando... \n");
+	// dos por build_blocks
+	int n_blocks = 65536 - 9;
+	for (i = 0; i < n_blocks; i++) {
+		free(blocks[i]);
+	}
+	free(blocks);
+	// dos por build_dir_block
+	for (i = 0; i < 64; i++) {
+		free(dir_block[i]);
+	}
+	free(dir_block);
+	// uno por cz_open w
+	// uno por cz_open r
+	// for (i=0; i<64; i++){
+	// 	free(para_borrar[i]);
+	// }
+}
+
+
 void save_changes(char* bin_file) {
 	unsigned char wbuffer_entry[16];
 	direntry* entry;
@@ -254,7 +278,8 @@ czFILE* cz_open(char* filename, char mode) {
 			time_t now = time(NULL);
 			czfd -> timestamp_create = now;
 			czfd -> timestamp_update = now;
-			// Falta el atributo block** content_blocks...
+			contador_a_borrar++;
+			para_borrar[contador_a_borrar] = czfd;
 			return czfd;
 		}
 	} else if (mode == 'w') {
@@ -312,6 +337,9 @@ czFILE* cz_open(char* filename, char mode) {
 			save_int(index_KB, 4, czfd -> timestamp_create);
 			// set update timestamp bytes
 			save_int(index_KB, 8, czfd -> timestamp_update);
+
+			contador_a_borrar++;
+			para_borrar[contador_a_borrar] = czfd;
 
 			return czfd;
 		}
@@ -587,8 +615,10 @@ int cz_cp(char* orig, char* dest) {
 	aux2->kilobyte[1] = aux->kilobyte[1];
 	aux2->kilobyte[2] = aux->kilobyte[2];
 	aux2->kilobyte[3] = aux->kilobyte[3];
-	int tamano = aux->kilobyte[0] | aux->kilobyte[1] | aux->kilobyte[2] | aux->kilobyte[3];
-	int num_bloques = tamano/1024 + 1;
+	// load_int(aux->kilobyte, 0); : 
+	int tamano = aux->kilobyte[0] | aux->kilobyte[1] | aux->kilobyte[2] | aux->kilobyte[3];  // malo
+	int num_bloques = (tamano / 1024) + 1;  // malo
+	// if (size % 1024) {KBs++;}
 	//printf("Tamaño es %i, número de bloques a revisar es %i \n", tamano, num_bloques);
 	time_t now = time(NULL);
 	aux2->kilobyte[4] = now >> 24; // timestamp creación
@@ -682,11 +712,12 @@ int cz_rm (char* filename) {
 	}
 
 	if (second_level) {
+		// printf("block to down %d\n", block_to_down);  // 0
 		unsigned char* indirect_index_KB = get_block(block_to_down) -> kilobyte;
 		int indirect_n_blocks = 0;
 		while (rmvd_blocks < KBs) {
 			// printf("while here\n");
-			// printf("%c\n", indirect_index_KB[0]); // segmentation fault aquí ******************************
+			// printf("%c\n", indirect_index_KB[0]);
 			// printf("%c\n", indirect_index_KB[1]);
 			// printf("%c\n", indirect_index_KB[2]);
 			// printf("%c\n", indirect_index_KB[3]);

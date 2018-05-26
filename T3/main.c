@@ -79,6 +79,9 @@ int main(int argc, char const *argv[])
 
 	cz_close(fd);
 
+	// existe nuevo
+	printf("\nExiste 'newfile': %d\n", cz_exists("newfile"));
+
 	// cambia nombre
 	printf("\nMOVE\n");
 	cz_mv("newfile", "iFile");
@@ -98,13 +101,15 @@ int main(int argc, char const *argv[])
 	// borra archivos: cambios en validez y bitmap pero ruido queda
 	printf("\nREMOVE\n");
 	cz_rm("iFile");
-	// cz_rm("myFile");  // segmentation fault aquí ******************************
+	// cz_rm("myFile");
 
-	// muestra lista original
-	printf("source files:\n");
+	// muestra lista sin iFile
+	printf("post remove:\n");
 	cz_ls();
 
 	printf("\n");
+
+	liberar();
 
 	return 0;
 }

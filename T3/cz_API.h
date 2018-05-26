@@ -35,6 +35,7 @@ int get_first_available();
 void build_blocks(FILE* filedesc);
 block* get_block(int b);
 int indice_dir_nombre (char* filename);
+void liberar();
 void save_changes(char* bin_file);
 void init(char* source_bin);
 int cz_exists(char* filename);
