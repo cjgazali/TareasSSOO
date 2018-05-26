@@ -78,6 +78,22 @@ void mostrar_letras(char* array){
 }
 
 
+void save_int(unsigned char* buffer, int index, int integer) {
+	buffer[index] = integer >> 24;
+	buffer[index + 1] = integer >> 16;
+	buffer[index + 2] = integer >> 8;
+	buffer[index + 3] = integer;
+}
+
+
+int load_int(unsigned char* buffer, int index) {
+	return buffer[index] << 24
+		| buffer[index + 1] << 16
+		| buffer[index + 2] << 8
+		| buffer[index + 3];
+}
+
+
 void build_dir_block(FILE* filedesc) {
 	unsigned char buffer[16];
 	dir_block = calloc(64, sizeof(direntry*));
@@ -88,7 +104,7 @@ void build_dir_block(FILE* filedesc) {
 		// printf("Validez: %u \n", dir_block[i] -> valid);
 		guardar_caracteres(dir_block[i] -> name, buffer, 1, 11);
 		// printf("Nombre: %s \n", dir_block[i] -> name);
-		dir_block[i] -> index_block = (buffer[12] << 24) | (buffer[13] << 16) | (buffer[14] << 8) | buffer[15];
+		dir_block[i] -> index_block = load_int(buffer, 12);  // (buffer[12] << 24) | (buffer[13] << 16) | (buffer[14] << 8) | buffer[15];
 		// printf("Índice de bloque: %i \n", dir_block[i] -> index_block);
 	}
 	// printf("read %d blocks\n", n_bytes / 1024);
@@ -174,19 +190,11 @@ int indice_dir_nombre (char* filename){
 }
 
 
-void save_int(unsigned char* buffer, int index, int integer) {
-	buffer[index] = integer >> 24;
-	buffer[index + 1] = integer >> 16;
-	buffer[index + 2] = integer >> 8;
-	buffer[index + 3] = integer;
-}
-
-
-void save_changes() {
+void save_changes(char* bin_file) {
 	unsigned char wbuffer_entry[16];
 	direntry* entry;
 
-	FILE* testfp = fopen(bin_file_name, "w");
+	FILE* testfp = fopen(bin_file, "w");  // bin_file_name
 
 	// cambios bloque directorio
 	for (i = 0; i < 64; i++) {
@@ -239,6 +247,24 @@ czFILE* cz_open(char* filename, char mode) {
 			return NULL;
 		} else {
 			// build czFILE
+			int indice_bloque_leido = indice_dir_nombre(filename);
+			direntry* entry = dir_block[indice_bloque_leido];
+			czFILE* czfd = calloc(1, sizeof(czFILE));
+			save_name(czfd -> name, filename);
+			czfd -> mode = 'r'; // cambiado
+			czfd -> index_block = entry -> index_block; // cambiado, voy a la entrada y pido index_block
+			block* ptr_aux = get_block(czfd -> index_block); // para que no salga tan largo
+			// czfd -> size = (get_block[czfd -> index_block][0] << 24) |
+			// (get_block[czfd -> index_block][1] << 16) | 
+			// (get_block[czfd -> index_block][2] << 8) | 
+			// (get_block[czfd -> index_block][3]);
+			czfd -> size = load_int(ptr_aux->kilobyte, 0);  // (unsigned int)((ptr_aux->kilobyte[0]<<24) | (ptr_aux->kilobyte[1]<<16)| (ptr_aux->kilobyte[2]<<8) | (ptr_aux->kilobyte[3])); // cambiado
+			// printf("%u %u %u %u \n", ptr_aux->kilobyte[0], ptr_aux->kilobyte[1], ptr_aux->kilobyte[2], ptr_aux->kilobyte[3]);
+			time_t now = time(NULL);
+			czfd -> timestamp_create = now;
+			czfd -> timestamp_update = now;
+			// Falta el atributo block** content_blocks...
+			return czfd;
 		}
 	} else if (mode == 'w') {
 		if (exists) {
@@ -300,7 +326,87 @@ czFILE* cz_open(char* filename, char mode) {
 }
 
 
-// int cz_read(czFILE* file_desc, void* buffer, int nbytes)
+int n_blocks_read = 0;  // cantidad total de bloques leídos
+int second_level_read = 0;  // 1 si ya estoy en direccionamiento indirecto
+int n_level_blocks_read = 0;  // bloques leídos en nivel
+int current_block_byte = 0;  // bytes leídos en bloque
+
+
+int cz_read(czFILE* file_desc, void* buffer, int nbytes){
+
+ 	if (file_desc -> mode != 'r'){
+ 		return -1;
+ 	}
+
+ 	unsigned char* cbuffer = (unsigned char*)buffer;
+
+ 	// get index block kilobyte
+	unsigned char* index_KB = get_block(file_desc -> index_block) -> kilobyte;
+	int i_indirect_block = load_int(index_KB, 1020);
+	unsigned char* indirect_index_KB = get_block(i_indirect_block) -> kilobyte;
+
+	//// variables útiles:
+	int effective_bytes = 0;  // tamaño leído de archivo a, valor de retorno
+	int current_buffer_byte = 0;  // byte de buffer que se está escribiendo
+	// int i_to_read;  // índice de bloque disponible encontrado
+	unsigned char* current_kilobyte;  // puntero a KB de bloque leído
+	// int current_kilobyte_byte = current_byte;  // índice de byte leído en bloque
+	int iblock;
+	// int restart_current_block_byte;
+	// if (current_block_byte == 1024) {
+	// 	restart_current_block_byte = 1;
+	// } else {
+	// 	restart_current_block_byte = 0;
+	// }
+	
+
+	// if (second_level_read) {
+	// 	int i_indirect_block = load_int(index_KB, 1020);
+	// 	unsigned char* indirect_index_KB = get_block(i_indirect_block);
+	// }
+
+	while (effective_bytes < nbytes) {
+
+		if (n_blocks_read == 252) {  // se acabó primer nivel
+			second_level_read = 1;
+			// int i_indirect_block = load_int(index_KB, 1020);
+			// unsigned char* indirect_index_KB = get_block(i_indirect_block);
+			n_level_blocks_read = 0;
+		}
+
+		if (second_level_read) {
+			iblock = load_int(indirect_index_KB, 4 * n_level_blocks_read);
+			current_kilobyte = get_block(iblock) -> kilobyte;
+		} else {
+			iblock = load_int(index_KB, 12 + 4 * n_level_blocks_read);
+			current_kilobyte = get_block(iblock) -> kilobyte;
+		}
+
+		// if (restart_current_block_byte) {
+		// 	current_block_byte = 0;
+		// } else {
+		// 	restart_current_block_byte = 1;
+		// }
+
+		while (current_block_byte < 1024 && effective_bytes < nbytes) {
+			cbuffer[current_buffer_byte] = current_kilobyte[current_block_byte];
+			current_buffer_byte++;
+			current_block_byte++;
+			// n_bytes_read++;
+			effective_bytes++;
+		}
+
+		if (current_block_byte < 1024) {
+			break;
+		}
+		n_level_blocks_read++;
+		n_blocks_read++;
+		current_block_byte = 0;
+	}
+
+	return effective_bytes;
+
+ }
 
 
 int cz_write(czFILE* file_desc, void* buffer, int nbytes) {
@@ -317,7 +423,6 @@ int cz_write(czFILE* file_desc, void* buffer, int nbytes) {
 	//// variables útiles:
 	int effective_bytes = 0;  // tamaño guardado de archivo en B, valor de retorno
 	int i_to_fill;  // índice de bloque disponible encontrado
-	// int current_buffer_byte = 0;  // escritura total
 	unsigned char* current_kilobyte;  // puntero a KB de bloque disponible
 	int current_kilobyte_byte;  // índice de byte escribiendo en bloque
 	int n_first_level_block = 0;  // # bloques de primer nivel llenados
@@ -377,9 +482,6 @@ int cz_write(czFILE* file_desc, void* buffer, int nbytes) {
 
 			base = n_second_level_block * 4;
 			save_int(indirect_index_KB, base, i_to_fill);
-			if (n_second_level_block == 256) {  // se acabó segundo nivel
-				break;
-			}
 			n_second_level_block++;
 
 			current_kilobyte = get_block(i_to_fill) -> kilobyte;
@@ -389,6 +491,12 @@ int cz_write(czFILE* file_desc, void* buffer, int nbytes) {
 				current_kilobyte[current_kilobyte_byte] = cbuffer[effective_bytes];
 				current_kilobyte_byte++;
 				effective_bytes++;
+			}
+
+			if (n_second_level_block == 256 && effective_bytes < nbytes) {
+				// se acabó segundo nivel
+				// solo entra si NO terminó de escribir nbytes además
+				break;
 			}
 		}
 	}
@@ -411,11 +519,16 @@ int cz_write(czFILE* file_desc, void* buffer, int nbytes) {
 
 int cz_close(czFILE* file_desc) {
 	if (file_desc -> mode == 'r') {
+		n_blocks_read = 0;
+		second_level_read = 0;
+		n_level_blocks_read = 0;
+		current_block_byte = 0;
+
 		free(file_desc);
 		return 0;
 	}
 
-	save_changes();
+	save_changes("my.bin");
 
 	free(file_desc);
 	return 0;
@@ -465,13 +578,39 @@ int cz_rm (char* filename){
 	direntry* entry = dir_block[idir];
 	entry -> valid = 0;
 
-
-
+	down_bitmap_bit(entry -> index_block);
 	unsigned char* index_KB = get_block(entry -> index_block) -> kilobyte;
-	// 
+	
+	int size = load_int(index_KB, 0);
+	int KBs = size / 1024;
+	if (size % 1024) {KBs++;}
 
+	unsigned int block_to_down;
+	int n_blocks = 0;
+	int second_level = 0;
 
-	save_changes();
+	while (n_blocks < KBs) {
+		block_to_down = load_int(index_KB, 12 + (4 * n_blocks));
+		down_bitmap_bit(block_to_down);
+		if (n_blocks == 252) {
+			second_level = 1;
+			break;
+		}
+		n_blocks++;
+	}
+
+	if (second_level) {
+		unsigned char* indirect_index_KB = get_block(block_to_down) -> kilobyte;
+		int indirect_n_blocks = 0;
+		while (n_blocks < KBs) {
+			block_to_down = load_int(indirect_index_KB, 4 * indirect_n_blocks);
+			down_bitmap_bit(block_to_down);
+			indirect_n_blocks++;
+			n_blocks++;
+		}
+	}
+
+	save_changes("myrm.bin");
 
 	return 0;
 }
@@ -488,21 +627,33 @@ void cz_ls() {
 }
 
 
-int main(int argc, char const *argv[])
-{
+void init(char* source_bin) {
+	save_full_name(bin_file_name, source_bin);
+	printf("source: %s\n", bin_file_name);
 
-	/////
-	save_full_name(bin_file_name, "simdiskformat.bin");
-	printf("%s\n", bin_file_name);
-
-	FILE* bfd = fopen(bin_file_name, "r");  // r for read, b for binary
+	FILE* bfd = fopen(bin_file_name, "r");
 
 	build_dir_block(bfd);
 	build_bit_map(bfd);
 	build_blocks(bfd);
 
 	fclose(bfd);
-	/////
+}
+
+
+int main(int argc, char const *argv[])
+{
+
+	// inicializa datos a partir de archivo .bin fuente
+	init("simdiskfilled.bin");
+
+	// archivos que vienen
+	printf("source files:\n");
+	cz_ls();
+
+	// lee y hace dump de archivo que viene
+	// ver nombres en terminal si es necesario y uncomment para generar archivo
+	// cz_read_dump("texto.txt")
 
 	// abre archivo 'newfile' en modo escritura
 	czFILE* fd = cz_open("newfile", 'w');
@@ -510,22 +661,79 @@ int main(int argc, char const *argv[])
 	// crear buffer para escritura
 	int wbuffer_size = 300;  // ajustar a gusto
 	char c[wbuffer_size * 1024];
+	
 	for (i = 0; i < wbuffer_size * 1024; i++) {
 		c[i] = 'a';  // 0x61
 	}
+	// para primer read:
+	c[0] = 'a';
+	c[1] = 'b';
+	c[2] = 'c';
+	c[3] = '1';
+	c[4] = '9';
+	c[5] = '7';
+	c[6] = '3';
+	// para segundo read
+	c[15] = '8';
+	// para read con direccionamiento indirecto
+	c[295 * 1024] = 'x';
 
 	// escribe buffer
+	printf("\nWRITE\n");
 	int bytes_writen = cz_write(fd, c, wbuffer_size * 1024);
 
 	printf("KB written: %d\n", bytes_writen / 1024);
 
 	// cierra archivio y garantiza cambios en .bin
-	// cz_close(fd);
+	cz_close(fd);
 
+	// muestra lista con newfile
+	printf("added 'newfile':\n");
+	//cz_ls();
 
-	// printf("%d\n", n_bytes / 1024);
+	printf("\nREAD\n");
+	fd = cz_open("newfile", 'r');
 
-	// printf("%i \n", cz_rm("no existe")); // 1, no existe el archivo
+	char buf[11];
+	printf("bytes leídos: %d\n", cz_read(fd, buf, 10));
+	buf[10] = '\0';
+	printf("primer read: %s\n", buf);
+	
+	printf("bytes leídos: %d\n", cz_read(fd, buf, 10));
+	buf[10] = '\0';
+	printf("segundo read: %s\n", buf);
+
+	char buff[wbuffer_size * 1024];
+	printf("bytes leídos: %d\n", cz_read(fd, buff, wbuffer_size * 1024 - 20));
+	printf("read de 'x' en direccionamiento indirecto: %c\n", buff[295 * 1024 - 20]);
+
+	cz_close(fd);
+
+	// cambia nombre
+	printf("\nMOVE\n");
+	cz_mv("newfile", "iFile");
+
+	// muestra lista con iFile
+	printf("'newfile' to 'iFile':\n");
+	//cz_ls();
+
+	// copia iFile en myFile
+	printf("\nCOPY\n");
+	// cp
+
+	// muestra lista con copia
+	printf("'iFile' to 'myFile':\n");
+	//cz_ls();
+
+	// borra archivos: cambios en validez y bitmap pero ruido queda
+	printf("\nREMOVE\n");
+	cz_rm("iFile");
+	// cz_rm("myFile");
+
+	// muestra lista original
+	printf("source files:\n");
+	cz_ls();
+
 	// printf("%i \n", cz_cp("no existe", "archivo")); // 1, no existe orig
 	// printf("%i \n", cz_cp("arch", "archivo")); // 2, ya existe dest
 	

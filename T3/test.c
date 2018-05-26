@@ -68,5 +68,8 @@ int main(int argc, char const *argv[])
 	unsigned int recover1 = ca << 24 | cb << 16 | cc << 8 | cd;
 	printf("recovered %u\n", recover1);
 
+	unsigned char hola[20];
+	printf("%c\n", hola[19]);
+
 	return 0;
 }
