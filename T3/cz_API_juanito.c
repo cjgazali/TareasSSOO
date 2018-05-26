@@ -6,12 +6,15 @@
 
 int i;
 int z;
+int q;
 
 int n_bytes;
 
 //int pos_ultima_llamada_read = 11; // para que parta de 12, saltando metadata
 int indice_bloque_actual = 12;
 int byte_actual_bloque = 0;
+
+int n_blocks = 65536 - 9;
 
 typedef struct Block {
 	unsigned char kilobyte[1024];
@@ -33,7 +36,8 @@ typedef struct czFILEstruct {
 	//block** content_blocks;  // 508
 } czFILE;
 
-
+czFILE* para_borrar[64];
+int contador_a_borrar = 0;
 direntry** dir_block;  // = calloc(64, sizeof(direntry*));
 unsigned char bitmap[1024 * 8];
 block** blocks;  // = calloc(65536 - 9, sizeof(block*));
@@ -88,6 +92,13 @@ void build_dir_block(FILE* filedesc) {
 void build_bit_map(FILE* filedesc) {
 	n_bytes += fread(bitmap, 1, 1024 * 8, filedesc);
 	// printf("read %d blocks\n", n_bytes / 1024);
+}
+
+void save_int(unsigned char* buffer, int index, int integer) {
+	buffer[index] = integer >> 24;
+	buffer[index + 1] = integer >> 16;
+	buffer[index + 2] = integer >> 8;
+	buffer[index + 3] = integer;
 }
 
 char get_bitmap_bit(unsigned int iblock) {
@@ -157,6 +168,61 @@ int indice_dir_nombre (char* filename){
 	return -1;
 }
 
+void liberar(){
+	printf("Liberando... \n");
+	// dos por build_blocks
+	int n_blocks = 65536 - 9;
+	for (i = 0; i < n_blocks; i++) {
+		free(blocks[i]);
+	}
+	free(blocks);
+	// dos por build_dir_block
+	for (i = 0; i < 64; i++) {
+		free(dir_block[i]);
+	}
+	free(dir_block);
+	// uno por cz_open w
+	// uno por cz_open r
+	for (i=0; i<64; i++){
+		free(para_borrar[i]);
+	}
+}
+
+void save_changes() {
+	unsigned char wbuffer_entry[16];
+	direntry* entry;
+
+	FILE* testfp = fopen("nuevo_bin.bin", "w");
+
+	// cambios bloque directorio
+	for (i = 0; i < 64; i++) {
+
+		entry = dir_block[i];
+
+		wbuffer_entry[0] = entry -> valid;
+
+		char* name = entry -> name;
+		for (z = 0; z < 11; z++) {
+			wbuffer_entry[z + 1] = name[z];
+		}
+
+		save_int(wbuffer_entry, 12, entry -> index_block);
+
+		fwrite(wbuffer_entry, 1, 16, testfp);
+
+	}
+
+	// cambios bitmap
+	fwrite(bitmap, 1, 1024 * 8, testfp);
+
+	// cambios otros bloques
+	for (i = 0; i < n_blocks; i++) {
+		fwrite(blocks[i] -> kilobyte, 1, 1024, testfp);
+	}
+
+	fclose(testfp);
+}
+
 
 // EMPIEZAN LAS CZ_
 int cz_exists(char* filename) {
@@ -191,11 +257,14 @@ czFILE* cz_open(char* filename, char mode) {
 			// (get_block[czfd -> index_block][2] << 8) | 
 			// (get_block[czfd -> index_block][3]);
 			czfd -> size = (unsigned int)((ptr_aux->kilobyte[0]<<24) | (ptr_aux->kilobyte[1]<<16)| (ptr_aux->kilobyte[2]<<8) | (ptr_aux->kilobyte[3])); // cambiado
-			printf("%u %u %u %u \n", ptr_aux->kilobyte[0], ptr_aux->kilobyte[1], ptr_aux->kilobyte[2], ptr_aux->kilobyte[3]);
+			// printf("%u %u %u %u \n", ptr_aux->kilobyte[0], ptr_aux->kilobyte[1], ptr_aux->kilobyte[2], ptr_aux->kilobyte[3]);
 			time_t now = time(NULL);
 			czfd -> timestamp_create = now;
 			czfd -> timestamp_update = now;
 			// Falta el atributo block** content_blocks...
+			// Agrego para borrar después
+			contador_a_borrar++;
+			para_borrar[contador_a_borrar] = czfd;
 			return czfd;
 		}
 	} else if (mode == 'w') {
@@ -247,7 +316,8 @@ czFILE* cz_open(char* filename, char mode) {
 			czfd -> timestamp_create = now;
 			czfd -> timestamp_update = now;
 			// czfd -> content_blocks = calloc(508, sizeof(block*));
-
+			contador_a_borrar++;
+			para_borrar[contador_a_borrar] = czfd;
 			return czfd;
 		}
 	}
@@ -395,13 +465,91 @@ int cz_cp(char* orig, char* dest){
 	if (!cz_exists(orig)){
 		return 1; // no existe el archivo de origen
 	}
-	// reviso que no exista dest
-	if (!cz_exists(dest)){
+	if (cz_exists(dest)){
 		return 2; // ya existe dest
 	}
-	// guardo el índice de orig en indice_orig
-	int indice_orig = indice_dir_nombre(orig);
-	// copiar de verdad el archivo de índice indice_orig... RELLENAR
+	int indice_orig = indice_dir_nombre(orig); // guardar índice
+	for (i=0; i<64; i++){
+		if (!dir_block[i] -> valid){
+			//printf("Me voy a insertar en %i\n", i);
+			break;
+		}
+		if (i == 63){ //me pasé, no hay espacio
+			//printf("No hay espacio para copiar");
+			return 3; // no hay espacio
+		}
+	}
+	dir_block[i] -> index_block = get_first_available(); // encuentro bloque disponible
+	dir_block[i] -> valid = 1;
+	save_name(dir_block[i]->name, dest);
+	up_bitmap_bit(dir_block[i] -> index_block); // lo marco como ocupado
+	//printf("Directorio en %i\n", dir_block[i] -> index_block);
+	// save name, validar entrada
+
+	block* aux = get_block(dir_block[indice_orig] -> index_block); // aux es el bloque índice que copio
+	block* aux2 = get_block(dir_block[i] -> index_block); // aux es el bloque índice de la copia (nuevo)
+	aux2->kilobyte[0] = aux->kilobyte[0]; // copio tamaño
+	aux2->kilobyte[1] = aux->kilobyte[1];
+	aux2->kilobyte[2] = aux->kilobyte[2];
+	aux2->kilobyte[3] = aux->kilobyte[3];
+	int tamano = aux->kilobyte[0] | aux->kilobyte[1] | aux->kilobyte[2] | aux->kilobyte[3];
+	int num_bloques = tamano/1024 + 1;
+	//printf("Tamaño es %i, número de bloques a revisar es %i \n", tamano, num_bloques);
+	time_t now = time(NULL);
+	aux2->kilobyte[4] = now >> 24; // timestamp creación
+	aux2->kilobyte[5] = now >> 16;
+	aux2->kilobyte[6] = now >> 8;
+	aux2->kilobyte[7] = now;
+	// printf("Timestamp creación \n");
+	for (z=3; z<num_bloques+3; z++){  // itero por los punteros del bloque índice
+		int new_block = get_first_available(); // enuentro bloque disponible
+		save_int(aux2->kilobyte, 4*z, new_block); // lo guardo
+		// aux2->kilobyte[z] = get_first_available(); // encuentro bloque disponible
+		up_bitmap_bit(new_block); // lo marco
+		//printf("Llegué al bloque de datos %i-esimo\n", z);
+		//printf("%u \n", aux->kilobyte[z]);
+		//printf("%i, %i \n",new_block, (aux2->kilobyte[4*z]<<24) | (aux2->kilobyte[4*z+1]<<16) | (aux2->kilobyte[4*z+2]<<8) | aux2->kilobyte[4*z+3]);
+		//get_block(11);
+		//printf("Copiando en %i\n", new_block);
+		block* viejo = get_block((aux->kilobyte[4*z]<<24) | (aux->kilobyte[4*z+1]<<16) | (aux->kilobyte[4*z+2]<<8) | aux->kilobyte[4*z+3]);
+		block* nuevo = get_block((aux2->kilobyte[4*z]<<24) | (aux2->kilobyte[4*z+1]<<16) | (aux2->kilobyte[4*z+2]<<8) | aux2->kilobyte[4*z+3]);
+		//printf("Aux2: %i \n", (aux2->kilobyte[4*z]<<24) | (aux2->kilobyte[4*z+1]<<16) | (aux2->kilobyte[4*z+2]<<8) | aux2->kilobyte[4*z+3]);
+		//printf("Aux: %i \n", (aux->kilobyte[4*z]<<24) | (aux->kilobyte[4*z+1]<<16) | (aux->kilobyte[4*z+2]<<8) | aux->kilobyte[4*z+3]);
+		for (q=0; q<1024; q++){ // itero por cada byte del data block
+			nuevo->kilobyte[q] = viejo->kilobyte[q];
+			//printf("Llegué al dato %i\n ", q);
+			//printf("%u viejo y %u nuevo \n", viejo->kilobyte[q], nuevo->kilobyte[q]);
+		}
+		if (z==251 && num_bloques!= 251){ //Usar indirección, 255-3-1=251
+			// Voy al de indirección original
+			block* new_aux = get_block((aux->kilobyte[1020]<<24) | (aux->kilobyte[1021]<<16) | (aux->kilobyte[1022]<<8) | aux->kilobyte[1023]);
+			// indirección de la copia
+			int new_block = get_first_available();
+			save_int(aux2->kilobyte, 1020, new_block);
+			block* new_aux2 = get_block((aux2->kilobyte[1020]<<24) | (aux2->kilobyte[1021]<<16) | (aux2->kilobyte[1022]<<8) | aux2->kilobyte[1023]);
+			for (z=0; z<num_bloques-252; z++){  // itero por los punteros del nuevo bloque índice, condición de término cambia...
+				// ojo, z parte desde 0 porque no hay metadata
+				int new_block = get_first_available(); // enuentro bloque disponible
+				save_int(new_aux2->kilobyte, 4*z, new_block); // lo guardo
+				up_bitmap_bit(new_block); // lo marco
+				block* viejo = get_block((new_aux->kilobyte[4*z]<<24) | (new_aux->kilobyte[4*z+1]<<16) | (new_aux->kilobyte[4*z+2]<<8) | new_aux->kilobyte[4*z+3]);
+				block* nuevo = get_block((new_aux2->kilobyte[4*z]<<24) | (new_aux2->kilobyte[4*z+1]<<16) | (new_aux2->kilobyte[4*z+2]<<8) | new_aux2->kilobyte[4*z+3]);
+				for (q=0; q<1024; q++){ // itero por cada byte del data block
+					nuevo->kilobyte[q] = viejo->kilobyte[q];
+				}
+				z++;
+			break;
+			}
+		}
+	}
+	now = time(NULL);
+	aux2->kilobyte[8] = now >> 24; // timestamp actualización
+	aux2->kilobyte[9] = now >> 16;
+	aux2->kilobyte[10] = now >> 8;
+	aux2->kilobyte[11] = now;
+
+	save_changes();
+
 	return 0;
 }
 
@@ -442,38 +590,74 @@ int main(int argc, char const *argv[])
 	build_blocks(ptr);
 
 
-	czFILE* fd = cz_open("texto.txt", 'r');
-	printf("Name: %s \n", fd -> name);
-	printf("Mode: %c \n", fd -> mode);
-	printf("Size: %u \n", fd -> size);
-	printf("Index Block: %i \n", fd -> index_block);
+	//czFILE* fd = cz_open("texto.txt", 'r');
+	//printf("Name: %s \n", fd -> name);
+	//printf("Mode: %c \n", fd -> mode);
+	//printf("Size: %u \n", fd -> size);
+	//printf("Index Block: %i \n", fd -> index_block);
 
-	fd = cz_open("chest.wav", 'r');
-	printf("Name: %s \n", fd -> name);
-	printf("Mode: %c \n", fd -> mode);
-	printf("Size: %u \n", fd -> size);
-	printf("Index Block: %i \n", fd -> index_block);
+	//fd = cz_open("chest.wav", 'r');
+	//printf("Name: %s \n", fd -> name);
+	//printf("Mode: %c \n", fd -> mode);
+	//printf("Size: %u \n", fd -> size);
+	//printf("Index Block: %i \n", fd -> index_block);
 
-	fd = cz_open("smile.png", 'r');
-	printf("Name: %s \n", fd -> name);
-	printf("Mode: %c \n", fd -> mode);
-	printf("Size: %u \n", fd -> size);
-	printf("Index Block: %i \n", fd -> index_block);
+	//fd = cz_open("smile.png", 'r');
+	//printf("Name: %s \n", fd -> name);
+	//printf("Mode: %c \n", fd -> mode);
+	//printf("Size: %u \n", fd -> size);
+	//printf("Index Block: %i \n", fd -> index_block);
 
-	fd = cz_open("aaaaa.gif", 'r');
-	printf("Name: %s \n", fd -> name);
-	printf("Mode: %c \n", fd -> mode);
-	printf("Size: %u \n", fd -> size);
-	printf("Index Block: %i \n", fd -> index_block);
+	//fd = cz_open("aaaaa.gif", 'r');
+	//printf("Name: %s \n", fd -> name);
+	//printf("Mode: %c \n", fd -> mode);
+	//printf("Size: %u \n", fd -> size);
+	//printf("Index Block: %i \n", fd -> index_block);
 
-	cz_ls();
+	//cz_ls();
 
 	// printf("%d\n", n_bytes / 1024);
 
 	// printf("%i \n", cz_rm("no existe")); // 1, no existe el archivo
-	// printf("%i \n", cz_cp("no existe", "archivo")); // 1, no existe orig
-	// printf("%i \n", cz_cp("arch", "archivo")); // 2, ya existe dest
+	// cz_ls();
+	//printf("%i \n", cz_cp("no existe", "archivo")); // 1, no existe orig
+	//printf("%i \n", cz_cp("chest.wav", "texto.txt")); // 2, ya existe dest
+	//printf("%i \n", cz_cp("texto.txt", "texto.txt")); // 3, orig = dest
+
+	//printf("Raro \n");
+	// printf("%i \n", cz_cp("texto.txt", "copia.txt"));
+
+	//printf("Revisando...\n");
+	int indice =indice_dir_nombre("texto.txt");
+	int bloque_indice = dir_block[indice]->index_block;
+	//printf("%u, %u, \n", indice, bloque_indice);
+	block* mi_bloque = get_block(bloque_indice);
+	block* datos = get_block((mi_bloque->kilobyte[0]<<24) | (mi_bloque->kilobyte[1]<<16) | (mi_bloque->kilobyte[2]<<8) | (mi_bloque->kilobyte[3]));
+	for (i=0;i<1024;i++){
+		if (datos->kilobyte[i]){
+			//printf("%u \n", datos->kilobyte[i]);
+		}
+	}
 	
+	printf("A copiar texto.txt \n");
+	cz_cp("texto.txt", "copia1");
+	printf("Texto.txt copiado \n\n");
+
+	printf("A copiar chest.wav \n");
+	cz_cp("chest.wav", "copia2");
+	printf("chest.wav copiado \n\n");
+
+	printf("A copiar smile.png \n");
+	cz_cp("smile.png", "copia3");
+	printf("smile.png copiado \n\n");
+	cz_ls();
+
+	printf("A copiar aaaaa.gif \n");
+	cz_cp("aaaaa.gif", "copia4");
+	printf("aaaaa.gif copiado \n\n");
+
+
+	// liberar();
 	fclose(ptr);
 
 	return 0;
